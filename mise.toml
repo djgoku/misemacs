@@ -35,6 +35,7 @@ python = "latest"
 "conda:pkg-config" = "latest"
 "conda:coreutils" = "latest"
 "conda:socat" = "latest"
+"conda:tar" = "latest"   # GNU tar — needed for deterministic --sort=name release tarballs
 
 [tasks.bootstrap]
 description = "Fresh-clone setup. Idempotent. Runs mise install + hydrate."

@@ -2307,6 +2307,46 @@ conda_deps = [
     "ncurses-6.6-hcc0dc9a_0",
 ]
 
+[[tools."conda:tar"]]
+version = "1.35"
+backend = "conda:tar"
+
+[tools."conda:tar"."platforms.linux-arm64"]
+checksum = "sha256:48ff9ff6cde5bcb1d74f77036fb66606c7e94a52c75978c65330bbd86741f8a4"
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/tar-1.35-h90929bb_0.conda"
+conda_deps = [
+    "libgcc-15.2.0-h8acb6b2_19",
+    "libiconv-1.18-h90929bb_2",
+    "_openmp_mutex-4.5-20_gnu",
+    "libgomp-15.2.0-h8acb6b2_19",
+]
+
+[tools."conda:tar"."platforms.linux-arm64-musl"]
+checksum = "sha256:48ff9ff6cde5bcb1d74f77036fb66606c7e94a52c75978c65330bbd86741f8a4"
+url = "https://conda.anaconda.org/conda-forge/linux-aarch64/tar-1.35-h90929bb_0.conda"
+conda_deps = [
+    "libgcc-15.2.0-h8acb6b2_19",
+    "libiconv-1.18-h90929bb_2",
+    "_openmp_mutex-4.5-20_gnu",
+    "libgomp-15.2.0-h8acb6b2_19",
+]
+
+[tools."conda:tar"."platforms.macos-arm64"]
+checksum = "sha256:31c65c2f20fddd506d1aafb698893dcd7486a15465e225e0f1defc9ec2fc98e2"
+url = "https://conda.anaconda.org/conda-forge/osx-arm64/tar-1.35-h3bfc444_0.conda"
+conda_deps = [
+    "libintl-0.25.1-h493aca8_0",
+    "libiconv-1.18-h23cfdf5_2",
+]
+
+[tools."conda:tar"."platforms.macos-x64"]
+checksum = "sha256:4081004679c88bec89809ca866235dae2ad7cd704c71de81793f8523bc9d3369"
+url = "https://conda.anaconda.org/conda-forge/osx-64/tar-1.35-h8dbd4d1_0.conda"
+conda_deps = [
+    "libiconv-1.18-h57a12c2_2",
+    "libintl-0.25.1-h3184127_1",
+]
+
 [[tools."conda:texinfo"]]
 version = "7.2"
 backend = "conda:texinfo"
