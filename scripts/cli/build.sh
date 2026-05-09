@@ -16,14 +16,15 @@ source "$SCRIPT_DIR/_lib.sh"
 target="${1:-emacs}"
 case "$target" in
     emacs)            dep_name="pkgs-emacs" ;;
+    emacs-mac)        dep_name="pkgs-emacs-mac" ;;
     enchant)          dep_name="libs-enchant" ;;
     jinx-mod)         dep_name="libs-jinx-mod" ;;
     emacs-libvterm)   dep_name="libs-emacs-libvterm" ;;
-    *)                die "unknown target '$target'; expected one of: emacs, enchant, jinx-mod, emacs-libvterm" ;;
+    *)                die "unknown target '$target'; expected one of: emacs, emacs-mac, enchant, jinx-mod, emacs-libvterm" ;;
 esac
 
 # --- Precheck (first-failure exit) ---
-PKGS=(pkgs/emacs libs/enchant libs/jinx-mod libs/emacs-libvterm)
+PKGS=(pkgs/emacs pkgs/emacs-mac libs/enchant libs/jinx-mod libs/emacs-libvterm)
 
 precheck_fail() {
     say "mise run build: precheck failed."
@@ -65,6 +66,12 @@ while IFS= read -r tool; do
 done < <(awk -F'"' '/^"conda:/ { print $2 }' "$ROOT/mise.toml" | sed 's/^conda://')
 
 # --- Build ---
+# `mise deps install <X>` traverses X's `depends` graph. For target=emacs
+# or emacs-mac, that pulls in libs-* (auto=false) and conda-* (auto=true)
+# transitively; mise's content-addressed freshness ensures only stale deps
+# actually run. We DON'T use the no-arg form here because it would build
+# ALL auto=false deps — both pkgs-emacs AND pkgs-emacs-mac — when the user
+# asked for just one flavor.
 mise deps install "$dep_name"
 
 # --- Sentinel for `mise run status` "last built" ---

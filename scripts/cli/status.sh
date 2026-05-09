@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/_lib.sh"
 
-PKGS=(pkgs/emacs libs/enchant libs/jinx-mod libs/emacs-libvterm)
+PKGS=(pkgs/emacs pkgs/emacs-mac libs/enchant libs/jinx-mod libs/emacs-libvterm)
 
 short() { printf '%.10s' "${1:-?}"; }
 

@@ -18,6 +18,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PKG_ALIASES=(
     "emacs:pkgs/emacs"
+    "emacs-mac:pkgs/emacs-mac"
     "enchant:libs/enchant"
     "jinx-mod:libs/jinx-mod"
     "emacs-libvterm:libs/emacs-libvterm"

@@ -42,8 +42,8 @@ description = "Fresh-clone setup. Idempotent. Runs mise install + hydrate."
 run = "bash scripts/cli/bootstrap.sh"
 
 [tasks.build]
-description = "Hermetic build — runs self-healing precheck then mise deps install. Pass a target alias as the first arg: emacs (default), enchant, jinx-mod, emacs-libvterm."
-run = 'bash scripts/cli/build.sh "${@:-emacs}"'
+description = "Hermetic build — runs self-healing precheck then mise deps install. Pass a target alias as the first arg: emacs (default), emacs-mac, enchant, jinx-mod, emacs-libvterm."
+run = 'bash scripts/cli/build.sh'
 
 [tasks.bump]
 description = "Bump a package version (atomic). Usage: mise run bump <pkg> <sha-or-version-or-latest>. <pkg> is an alias (emacs|enchant|jinx-mod|emacs-libvterm) or path or conda:<name>."
@@ -95,15 +95,24 @@ bash scripts/test/test-release-packaging.sh
 """
 
 [tasks.validate]
-description = "Build Emacs.app and verify it: bundle self-contained + doctor 8/8 PASS"
+description = "Verify any built Emacs.app bundle(s): self-contained + doctor 8/8 PASS"
 run = """
 set -e
-bash scripts/cli/build.sh emacs
-OUT="build/emacs"
-bash scripts/verify-bundle-self-contained.sh "$OUT/Emacs.app"
-"$OUT/Emacs.app/Contents/MacOS/Emacs" -Q -batch \
-    -L "$OUT/Emacs.app/Contents/Resources/site-lisp" \
-    -l moto-emacs-doctor -f moto-emacs-doctor-batch
+found=0
+for variant in emacs emacs-mac; do
+  out="build/$variant"
+  [ -d "$out/Emacs.app" ] || continue
+  found=1
+  echo "==> Validating $variant ($out/Emacs.app)"
+  bash scripts/verify-bundle-self-contained.sh "$out/Emacs.app"
+  "$out/Emacs.app/Contents/MacOS/Emacs" -Q -batch \\
+      -L "$out/Emacs.app/Contents/Resources/site-lisp" \\
+      -l moto-emacs-doctor -f moto-emacs-doctor-batch
+done
+if [ $found -eq 0 ]; then
+  echo "no Emacs.app found in build/emacs or build/emacs-mac — run 'mise run build [emacs|emacs-mac]' first" >&2
+  exit 1
+fi
 """
 
 # === Build graph: conda prefix providers ===
@@ -290,6 +299,44 @@ depends = [
   "conda-autoconf", "conda-automake",
 ]
 run = "bash scripts/build/emacs-app.sh pkgs/emacs"
+
+[deps.pkgs-emacs-mac]
+auto = false
+sources = [
+  "pkgs/emacs-mac/src/**/*",
+  "pkgs/emacs-mac/build.toml",
+  "pkgs/emacs-mac/src-sha.txt",
+  "pkgs/emacs-mac/src-commit-message.txt",
+  "build/enchant/lib/libenchant-2.a",
+  "build/enchant/lib/enchant-2/enchant_applespell.so",
+  "build/jinx-mod/lib/jinx-mod.so",
+  "build/emacs-libvterm/lib/vterm-module.so",
+  "build/conda-gnutls/.path",
+  "build/conda-gmp/.path",
+  "build/conda-libpng/.path",
+  "build/conda-libjpeg-turbo/.path",
+  "build/conda-giflib/.path",
+  "build/conda-libtree-sitter/.path",
+  "build/conda-libffi/.path",
+  "build/conda-glib/.path",
+  "build/conda-libvterm/.path",
+  "build/conda-pkg-config/.path",
+  "build/conda-texinfo/.path",
+  "build/conda-m4/.path",
+  "build/conda-libtool/.path",
+  "build/conda-autoconf/.path",
+  "build/conda-automake/.path",
+]
+outputs = ["build/emacs-mac/Emacs.app/Contents/MacOS/Emacs"]
+depends = [
+  "libs-enchant", "libs-jinx-mod", "libs-emacs-libvterm",
+  "conda-gnutls", "conda-gmp", "conda-libpng", "conda-libjpeg-turbo",
+  "conda-giflib", "conda-libtree-sitter", "conda-libffi", "conda-glib",
+  "conda-libvterm",
+  "conda-pkg-config", "conda-texinfo", "conda-m4", "conda-libtool",
+  "conda-autoconf", "conda-automake",
+]
+run = "bash scripts/build/emacs-app.sh pkgs/emacs-mac"
 
 [deps.libs-jinx-mod]
 auto = false

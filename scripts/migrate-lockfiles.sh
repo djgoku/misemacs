@@ -48,7 +48,7 @@ EOF
     echo "migrate: $lockfile: rewritten to v2 (sha=$sha)"
 }
 
-for pkg in pkgs/emacs libs/enchant libs/jinx-mod libs/emacs-libvterm; do
+for pkg in pkgs/emacs pkgs/emacs-mac libs/enchant libs/jinx-mod libs/emacs-libvterm; do
     migrate_one "$pkg/lockfile.toml"
 done
 

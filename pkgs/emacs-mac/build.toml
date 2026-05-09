@@ -1,0 +1,67 @@
+# pkgs/emacs-mac build metadata for scripts/build/emacs-app.sh.
+#
+# The configure_args list below is the flattened resolution of what was
+# previously expressed as boolean with_*/disable_* attrs on the emacs_app
+# rule (see prior commits in this branch for the original Starlark form).
+# Order matches the historical output so the manifest's "Configure flags"
+# line stays byte-stable across the cutover.
+
+src_repo = "https://github.com/jdtsmith/emacs-mac"
+
+configure_args = [
+  "--with-mac",
+  "--enable-mac-self-contained",
+  "--with-tree-sitter",
+  "--with-gnutls",
+  "--with-modules",
+  "--with-compress-install",
+  "--without-native-compilation",
+  "--without-imagemagick",
+  "--without-dbus",
+  "--without-selinux",
+  "--without-xinput2",
+  "--without-xwidgets",
+  "--without-small-ja-dic",
+  "--with-jpeg",
+  "--with-png",
+  "--without-tiff",
+  "--with-gif",
+  "--without-rsvg",
+  "--without-webp",
+  "--without-lcms2",
+  "--without-harfbuzz",
+  "--disable-build-details",
+  "--disable-gc-mark-trace",
+]
+
+bundle_enchant = true
+bundle_vterm = true
+bundle_jinx = true
+
+# Module deps — resolved against build/<name>/.
+enchant_dep = "enchant"
+vterm_module_dep = "emacs-libvterm"
+jinx_mod_dep = "jinx-mod"
+
+# Library deps — CFLAGS/LDFLAGS/PKG_CONFIG_PATH from build/<name>/.
+lib_deps = [
+  "conda-libpng",
+  "conda-libjpeg-turbo",
+  "conda-giflib",
+  "conda-libtree-sitter",
+  "conda-gnutls",
+  "conda-gmp",
+  "conda-libffi",
+  "conda-glib",
+  "conda-libvterm",
+]
+
+# Tool deps — PATH for autogen.sh / configure / make.
+tool_deps = [
+  "conda-pkg-config",
+  "conda-texinfo",
+  "conda-m4",
+  "conda-libtool",
+  "conda-autoconf",
+  "conda-automake",
+]

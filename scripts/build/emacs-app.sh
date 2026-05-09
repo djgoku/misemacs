@@ -178,13 +178,22 @@ export LDFLAGS="$LDFLAGS $EXTRA_RPATHS"
 
 ./autogen.sh
 
+# Use a writable prefix so `make install` doesn't require root.
+INSTALL_PREFIX="$TMPDIR/install"
+mkdir -p "$INSTALL_PREFIX"
+
 # shellcheck disable=SC2086
-./configure "${CONFIGURE_ARGS[@]}"
+./configure "--prefix=$INSTALL_PREFIX" "${CONFIGURE_ARGS[@]}"
 
 make bootstrap -j"$(sysctl -n hw.ncpu)"
 make install
 
-cp -R nextstep/Emacs.app "$OUT/Emacs.app"
+# Mac port builds the .app at mac/Emacs.app; NS port at nextstep/Emacs.app.
+if [ -d mac/Emacs.app ]; then
+    cp -R mac/Emacs.app "$OUT/Emacs.app"
+else
+    cp -R nextstep/Emacs.app "$OUT/Emacs.app"
+fi
 
 DIST="$OUT/Emacs.app"
 LIBDIR="$DIST/Contents/Frameworks/lib"
@@ -547,17 +556,25 @@ mise run build
 MANIFEST_FOOTER_EOF
 } > "$MANIFEST"
 
-# Codesign deeply (ad-hoc). Signs files individually (`\;` not `+`):
-# in batched mode codesign engages bundle-aware validation when it
-# encounters the main Emacs binary alongside its siblings, and then
-# fails because Emacs.pdmp (signed separately below — it's not a Mach-O
-# so the dylib/so/+111 finds skip it) hasn't been signed yet.
+# Codesign ad-hoc. Sign files individually (`\;` not `+`) — batched mode
+# engages bundle-aware validation that fails on this layout.
+#
+# The main Emacs binary needs out-of-bundle signing: codesign auto-detects
+# the bundle context when signing a file at $bundle/Contents/MacOS/<exe>
+# and walks the bundle's subcomponents. It then trips over the Mac port's
+# Contents/MacOS/libexec/<arch>/ directory (looks like a sub-bundle but
+# isn't), aborts mid-sign, and leaves the binary with an invalid signature
+# that macOS SIGKILLs at launch. Signing a copy outside the bundle avoids
+# the walker entirely.
 find "$DIST" -type f \( -name "*.dylib" -o -name "*.so" \) \
     -exec codesign --force --sign - {} \;
-find "$DIST/Contents/MacOS" -type f -perm +111 \
+find "$DIST/Contents/MacOS" -type f -perm +111 ! -name Emacs \
     -exec codesign --force --sign - {} \;
-codesign --force --sign - "$DIST/Contents/MacOS/libexec/Emacs.pdmp" 2>/dev/null || true
-codesign --force --deep --sign - "$DIST"
+solo_dir=$(mktemp -d)
+cp "$EMACS_BIN" "$solo_dir/Emacs"
+codesign --force --sign - "$solo_dir/Emacs"
+mv "$solo_dir/Emacs" "$EMACS_BIN"
+rmdir "$solo_dir"
 
 # --- Atomic install ---
 mkdir -p "$PREFIX_ROOT"
