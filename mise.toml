@@ -1,0 +1,333 @@
+[settings]
+experimental = true
+jobs = 4
+
+[tools]
+perl = "latest"
+python = "latest"
+
+# Conda libraries — emacs link-time deps. gnutls's env transitively bundles
+# nettle, gmp, libtasn1, libidn2, libffi, p11-kit, gettext — so those are
+# satisfied via gnutls's prefix even if not listed individually.
+"conda:gnutls" = "latest"
+"conda:gmp" = "latest"
+"conda:libpng" = "latest"
+"conda:libjpeg-turbo" = "latest"
+"conda:giflib" = "latest"
+"conda:libtree-sitter" = "latest"
+"conda:libffi" = "latest"
+"conda:enchant" = "latest"
+"conda:libvterm" = "latest"
+"conda:glib" = "latest"   # glib-2.0 — needed for from-source enchant build (enchant's pkg-config depends on glib-2.0)
+"conda:zlib" = "latest"   # zlib.pc — needed for from-source enchant build (gio-2.0 transitive)
+
+# Conda build tools — autotools chain + pkg-config + texinfo + make + vala
+# (vala is needed to compile enchant's .vala sources from-source).
+"conda:vala" = "latest"
+"conda:autoconf" = "latest"
+"conda:automake" = "latest"
+"conda:m4" = "latest"
+"conda:libtool" = "latest"
+"conda:texinfo" = "latest"
+"conda:bison" = "latest"
+"conda:make" = "latest"
+"conda:gettext" = "latest"
+"conda:pkg-config" = "latest"
+"conda:coreutils" = "latest"
+"conda:socat" = "latest"
+
+[tasks.bootstrap]
+description = "Fresh-clone setup. Idempotent. Runs mise install + hydrate."
+run = "bash scripts/cli/bootstrap.sh"
+
+[tasks.build]
+description = "Hermetic build — runs self-healing precheck then mise deps install. Pass a target alias as the first arg: emacs (default), enchant, jinx-mod, emacs-libvterm."
+run = 'bash scripts/cli/build.sh "${@:-emacs}"'
+
+[tasks.bump]
+description = "Bump a package version (atomic). Usage: mise run bump <pkg> <sha-or-version-or-latest>. <pkg> is an alias (emacs|enchant|jinx-mod|emacs-libvterm) or path or conda:<name>."
+run = 'bash scripts/cli/bump.sh "$@"'
+
+[tasks.doctor]
+description = "Cross-layer invariant check: lockfile/worktree/conda coherence."
+run = "bash scripts/cli/doctor.sh"
+
+[tasks.hydrate]
+description = "Populate .cache/mirrors and tools/*/src worktrees from lockfiles. Pass a package path as the first arg to hydrate just one (e.g., mise run hydrate pkgs/emacs)."
+run = 'bash scripts/hydrate.sh "${@:-}"'
+
+[tasks.migrate-lockfiles]
+description = "One-shot v1 → v2 lockfile migration. Idempotent."
+run = "bash scripts/migrate-lockfiles.sh"
+
+[tasks.rollback]
+description = "Roll back a from-source package to its previous lockfile state. Usage: mise run rollback <pkg>."
+run = 'bash scripts/cli/rollback.sh "$@"'
+
+[tasks.status]
+description = "One-glance read of in-sync state across all packages."
+run = "bash scripts/cli/status.sh"
+
+# Order: test-roundtrip is the broadest integration test (bump/build/rollback)
+# and runs first as a comprehensive regression check; unit tests follow;
+# test-self-heal-precheck is the focused Phase 2 integration test, run last.
+[tasks.test-cli]
+description = "Run all CLI/registry round-trip, self-heal, and unit tests."
+run = """
+set -e
+bash scripts/test/test-roundtrip.sh
+bash scripts/test/test-conda-input-hash.sh
+bash scripts/test/test-build-lib.sh
+bash scripts/test/test-cheap-verbs-fast.sh
+bash scripts/test/test-self-heal-precheck.sh
+"""
+
+[tasks.validate]
+description = "Build Emacs.app and verify it: bundle self-contained + doctor 8/8 PASS"
+run = """
+set -e
+bash scripts/cli/build.sh emacs
+OUT="build/emacs"
+bash scripts/verify-bundle-self-contained.sh "$OUT/Emacs.app"
+"$OUT/Emacs.app/Contents/MacOS/Emacs" -Q -batch \
+    -L "$OUT/Emacs.app/Contents/Resources/site-lisp" \
+    -l moto-emacs-doctor -f moto-emacs-doctor-batch
+"""
+
+# === Build graph: conda prefix providers ===
+# Each [deps.conda-<X>] symlinks the conda env subdirs into build/conda-<X>/
+# and writes a .path manifest. Downstream from-source [deps.*] include the
+# .path file in their `sources` so blake3 invalidates them precisely when
+# the env relocates.
+
+[deps.conda-autoconf]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-autoconf/.path"]
+run = "bash scripts/build/conda-prefix.sh autoconf"
+
+[deps.conda-automake]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-automake/.path"]
+run = "bash scripts/build/conda-prefix.sh automake"
+
+[deps.conda-bison]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-bison/.path"]
+run = "bash scripts/build/conda-prefix.sh bison"
+
+[deps.conda-coreutils]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-coreutils/.path"]
+run = "bash scripts/build/conda-prefix.sh coreutils"
+
+[deps.conda-enchant]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-enchant/.path"]
+run = "bash scripts/build/conda-prefix.sh enchant"
+
+[deps.conda-gettext]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-gettext/.path"]
+run = "bash scripts/build/conda-prefix.sh gettext"
+
+[deps.conda-giflib]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-giflib/.path"]
+run = "bash scripts/build/conda-prefix.sh giflib"
+
+[deps.conda-glib]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-glib/.path"]
+run = "bash scripts/build/conda-prefix.sh glib"
+
+[deps.conda-gmp]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-gmp/.path"]
+run = "bash scripts/build/conda-prefix.sh gmp"
+
+[deps.conda-gnutls]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-gnutls/.path"]
+run = "bash scripts/build/conda-prefix.sh gnutls"
+
+[deps.conda-libffi]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-libffi/.path"]
+run = "bash scripts/build/conda-prefix.sh libffi"
+
+[deps.conda-libjpeg-turbo]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-libjpeg-turbo/.path"]
+run = "bash scripts/build/conda-prefix.sh libjpeg-turbo"
+
+[deps.conda-libpng]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-libpng/.path"]
+run = "bash scripts/build/conda-prefix.sh libpng"
+
+[deps.conda-libtool]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-libtool/.path"]
+run = "bash scripts/build/conda-prefix.sh libtool"
+
+[deps.conda-libtree-sitter]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-libtree-sitter/.path"]
+run = "bash scripts/build/conda-prefix.sh libtree-sitter"
+
+[deps.conda-libvterm]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-libvterm/.path"]
+run = "bash scripts/build/conda-prefix.sh libvterm"
+
+[deps.conda-m4]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-m4/.path"]
+run = "bash scripts/build/conda-prefix.sh m4"
+
+[deps.conda-make]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-make/.path"]
+run = "bash scripts/build/conda-prefix.sh make"
+
+[deps.conda-pkg-config]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-pkg-config/.path"]
+run = "bash scripts/build/conda-prefix.sh pkg-config"
+
+[deps.conda-texinfo]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-texinfo/.path"]
+run = "bash scripts/build/conda-prefix.sh texinfo"
+
+[deps.conda-vala]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-vala/.path"]
+run = "bash scripts/build/conda-prefix.sh vala"
+
+[deps.conda-zlib]
+auto = true
+sources = ["mise.lock"]
+outputs = ["build/conda-zlib/.path"]
+run = "bash scripts/build/conda-prefix.sh zlib"
+
+# === Build graph: from-source library providers ===
+# Each [deps.libs-<X>] runs scripts/build/<rule>.sh against the package's
+# build.toml + src-sha.txt + hydrated src/ worktree, producing build/<X>/
+# as the install prefix. .path files from upstream conda providers are
+# included in `sources` so blake3 invalidates this build precisely when
+# a conda env it links against relocates.
+
+# === Build graph: from-source pkgs ===
+
+[deps.pkgs-emacs]
+auto = false
+sources = [
+  "pkgs/emacs/src/**/*",
+  "pkgs/emacs/build.toml",
+  "pkgs/emacs/src-sha.txt",
+  "pkgs/emacs/src-commit-message.txt",
+  "build/enchant/lib/libenchant-2.a",
+  "build/enchant/lib/enchant-2/enchant_applespell.so",
+  "build/jinx-mod/lib/jinx-mod.so",
+  "build/emacs-libvterm/lib/vterm-module.so",
+  "build/conda-gnutls/.path",
+  "build/conda-gmp/.path",
+  "build/conda-libpng/.path",
+  "build/conda-libjpeg-turbo/.path",
+  "build/conda-giflib/.path",
+  "build/conda-libtree-sitter/.path",
+  "build/conda-libffi/.path",
+  "build/conda-glib/.path",
+  "build/conda-libvterm/.path",
+  "build/conda-pkg-config/.path",
+  "build/conda-texinfo/.path",
+  "build/conda-m4/.path",
+  "build/conda-libtool/.path",
+  "build/conda-autoconf/.path",
+  "build/conda-automake/.path",
+]
+outputs = ["build/emacs/Emacs.app/Contents/MacOS/Emacs"]
+depends = [
+  "libs-enchant", "libs-jinx-mod", "libs-emacs-libvterm",
+  "conda-gnutls", "conda-gmp", "conda-libpng", "conda-libjpeg-turbo",
+  "conda-giflib", "conda-libtree-sitter", "conda-libffi", "conda-glib",
+  "conda-libvterm",
+  "conda-pkg-config", "conda-texinfo", "conda-m4", "conda-libtool",
+  "conda-autoconf", "conda-automake",
+]
+run = "bash scripts/build/emacs-app.sh pkgs/emacs"
+
+[deps.libs-jinx-mod]
+auto = false
+sources = [
+  "libs/jinx-mod/src/**/*",
+  "libs/jinx-mod/relocate-init.c",
+  "libs/jinx-mod/build.toml",
+  "build/enchant/lib/libenchant-2.a",
+  "build/enchant/lib/pkgconfig/enchant-2.pc",
+  "build/conda-glib/.path",
+  "build/conda-libffi/.path",
+  "build/conda-pkg-config/.path",
+]
+outputs = ["build/jinx-mod/lib/jinx-mod.so"]
+depends = ["libs-enchant", "conda-glib", "conda-libffi", "conda-pkg-config"]
+run = "bash scripts/build/cc-module.sh libs/jinx-mod"
+
+[deps.libs-emacs-libvterm]
+auto = false
+sources = [
+  "libs/emacs-libvterm/src/**/*",
+  "libs/emacs-libvterm/build.toml",
+  "build/conda-libvterm/.path",
+]
+outputs = ["build/emacs-libvterm/lib/vterm-module.so"]
+depends = ["conda-libvterm"]
+run = "bash scripts/build/cc-module.sh libs/emacs-libvterm"
+
+[deps.libs-enchant]
+auto = false
+sources = [
+  "libs/enchant/src/**/*",
+  "libs/enchant/build.toml",
+  "libs/enchant/pre-autogen.sh",
+  "libs/enchant/bootstrap.sh",
+  "build/conda-glib/.path",
+  "build/conda-libffi/.path",
+  "build/conda-zlib/.path",
+  "build/conda-pkg-config/.path",
+  "build/conda-libtool/.path",
+  "build/conda-vala/.path",
+  "build/conda-autoconf/.path",
+  "build/conda-automake/.path",
+  "build/conda-m4/.path",
+  "build/conda-coreutils/.path",
+]
+outputs = ["build/enchant/lib/libenchant-2.a"]
+depends = [
+  "conda-glib", "conda-libffi", "conda-zlib",
+  "conda-pkg-config", "conda-libtool", "conda-vala",
+  "conda-autoconf", "conda-automake", "conda-m4", "conda-coreutils",
+]
+run = "bash scripts/build/autotools.sh libs/enchant"

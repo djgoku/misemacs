@@ -1,0 +1,19 @@
+# emacs-libvterm build metadata for scripts/build/cc-module.sh.
+
+module_name = "vterm-module"
+module_srcs = ["vterm-module.c", "utf8.c", "elisp.c"]
+extra_srcs = []
+
+# vterm.el ships alongside vterm-module.so so emacs_app can drop both into
+# Contents/Resources/site-lisp/. (require 'vterm) → vterm.el → (require
+# 'vterm-module) finds the .dylib in the same dir.
+data_files = ["vterm.el"]
+
+cflags = ["-O2", "-Wall"]
+link_libs = ["vterm"]
+pkg_config_modules = []
+static_lib_deps = []
+static_lib_names = []
+
+lib_deps = ["conda-libvterm"]
+tool_deps = []

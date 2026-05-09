@@ -1,0 +1,280 @@
+#+TITLE: moto-registry
+#+AUTHOR: Jonathan Carroll Otsuka
+
+* Overview
+
+moto-registry produces a fully relocatable =Emacs.app= for macOS, built
+end-to-end via mise. Every C library and build tool comes from
+conda-forge via mise's conda backend; mise's experimental =[deps.*]=
+provider system orchestrates the build graph (with blake3 content-hash
+freshness checks).
+
+Three from-source packages handle the emacs-specific glue, plus the
+emacs build itself:
+
+- =libs/enchant= — enchant 2.8.3 with =--enable-relocatable= +
+  =--with-applespell=, providing libenchant-2.a (statically embedded
+  into jinx-mod) and the AppleSpell provider plugin.
+- =libs/jinx-mod= — Emacs dynamic module wrapping libenchant for the
+  jinx spell-check package.
+- =libs/emacs-libvterm= — Emacs dynamic module wrapping libvterm for
+  the vterm terminal package.
+- =pkgs/emacs= — runs Emacs's autogen+configure+make against the
+  conda-provided deps and bundles the result into a self-contained
+  =Emacs.app= at =build/emacs/Emacs.app=.
+
+* Quick start
+
+#+begin_src bash
+mise run bootstrap                          # mise install + hydrate
+mise run build                              # mise deps install pkgs-emacs (with self-healing precheck)
+mise run validate                           # 8/8 doctor + bundle self-contained gate
+
+cp -R build/emacs/Emacs.app ~/Applications/Emacs.app
+#+end_src
+
+To bump emacs (or any from-source pkg) to a new sha:
+
+#+begin_src bash
+mise run bump emacs <sha-or-prefix-or-latest>          # rewrites lockfile + hydrates
+mise run build                                         # rebuilds only what changed (blake3-keyed)
+#+end_src
+
+To roll back the previous bump (uses =git log= of the lockfile):
+
+#+begin_src bash
+mise run rollback emacs
+mise run build
+#+end_src
+
+The bundle is fully relocatable — drop it anywhere on the filesystem
+and it just works.
+
+* Verify
+
+Run both checks with a single command:
+
+#+begin_src bash
+mise run validate
+#+end_src
+
+Or run them individually:
+
+#+begin_src bash
+# Static analysis: every Mach-O reference inside the bundle must be
+# either @-relative or under /System / /usr/lib. Catches absolute
+# conda-mise paths leaking into the bundle.
+bash scripts/verify-bundle-self-contained.sh build/emacs/Emacs.app
+
+# Runtime: load jinx-mod + vterm-module, confirm enchant returns
+# at least one language. (Inside Emacs: M-x moto-emacs-doctor)
+build/emacs/Emacs.app/Contents/MacOS/Emacs -batch \
+  -l moto-emacs-doctor -f moto-emacs-doctor-batch
+#+end_src
+
+Both should exit 0; the doctor reports 8/8 PASS.
+
+* Architecture
+
+#+begin_src
+mise.toml
+├── [tools]               — perl, python, conda:* (link-time deps + build tools)
+├── [tasks.*]             — user-facing verbs: bootstrap, build, bump, rollback,
+│                            doctor, status, validate, hydrate, test-cli, …
+└── [deps.*]              — experimental mise providers; the build graph
+    ├── conda-glib …      — scripts/build/conda-prefix.sh <X>
+    │                        writes build/conda-<X>/{lib,include,share,bin,.path}
+    ├── libs-enchant      — scripts/build/autotools.sh libs/enchant
+    ├── libs-jinx-mod     — scripts/build/cc-module.sh libs/jinx-mod
+    ├── libs-emacs-libvterm
+    │                     — scripts/build/cc-module.sh libs/emacs-libvterm
+    └── pkgs-emacs        — scripts/build/emacs-app.sh pkgs/emacs
+
+scripts/build/
+├── _lib.sh               — shared helpers: resolve_dep_prefixes,
+│                            tool_dep_path_export, dep_injection_export,
+│                            rpath_install_name
+├── conda-prefix.sh       — symlinks a conda env's subdirs into
+│                            build/conda-<X>/, writes a .path manifest
+├── autotools.sh          — ./configure → make → make install (DESTDIR pattern)
+│                            from <pkg-dir>/build.toml
+├── cc-module.sh          — compiles a single .so from C sources, with
+│                            optional pkg-config + static-archive linking
+└── emacs-app.sh          — runs Emacs's autogen+configure+make and bundles
+                             a relocatable .app into build/emacs/Emacs.app
+
+libs/<X>/
+├── build.toml            — per-target build metadata (linkage, configure_args,
+│                            module_srcs, lib_deps, tool_deps, companion scripts)
+├── lockfile.toml         — schema_version=2; sha pin for the from-git source
+├── versions.toml         — repo URL, source.type=git, optional submodules=true
+├── pre-autogen.sh        — optional companion (e.g., libs/enchant)
+└── bootstrap.sh          — optional companion (e.g., libs/enchant)
+
+pkgs/emacs/
+├── build.toml            — emacs-specific knobs (configure flags, bundle_*,
+│                            *_dep names, lib_deps, tool_deps)
+└── (same lockfile.toml, versions.toml shape as libs/)
+
+scripts/
+├── hydrate.sh                          — populate libs/<X>/src + pkgs/<X>/src worktrees
+└── verify-bundle-self-contained.sh     — relocatability gate
+#+end_src
+
+* Build flow
+
+#+begin_src
+   mise.toml
+   ([tools] conda:* …)              ([deps.*] graph)
+        │                                 │
+        ▼                                 │
+   mise install                           │
+   conda libs/tools at $HOME/.local/      │
+        │                                 │
+        ▼                                 │
+   scripts/hydrate.sh                     │
+   git worktrees + src-sha.txt            │
+        │                                 │
+        └──────────────┬──────────────────┘
+                       ▼
+                 mise run build
+                       │
+                       ├── [tasks.build] → scripts/cli/build.sh
+                       │       │
+                       │       └── self-healing precheck (lockfile coherence,
+                       │             worktree HEAD, conda env presence)
+                       │
+                       └── mise deps install pkgs-emacs
+                              ├── [deps.conda-*]   (parallel; auto = true)  → build/conda-<X>/
+                              ├── [deps.libs-enchant]                        → build/enchant/
+                              ├── [deps.libs-jinx-mod]                       → build/jinx-mod/
+                              ├── [deps.libs-emacs-libvterm]                 → build/emacs-libvterm/
+                              └── [deps.pkgs-emacs]                          → build/emacs/Emacs.app
+                                       │
+                                       │  emacs-app.sh:
+                                       │    autogen → configure → make bootstrap → install
+                                       │    cp -R nextstep/Emacs.app → build/emacs/Emacs.app
+                                       │    bundle_one()  recursive @rpath walker pulls every
+                                       │                  linked dylib into Frameworks/lib/
+                                       │    strip absolute LC_RPATHs, add @-relative
+                                       │    emit Contents/Resources/build-manifest.org
+                                       │    ad-hoc codesign --deep
+                                       ▼
+                              Emacs.app   (fully relocatable)
+                                       │
+                                       ▼
+                              mise run validate
+   ┌────────────────────────────────────────────────────────┐
+   │ scripts/verify-bundle-self-contained.sh                │
+   │   LC_LOAD_DYLIB + LC_RPATH must be @-relative or       │
+   │   under /System / /usr/lib                             │
+   │                                                        │
+   │ moto-emacs-doctor-batch                                │
+   │   jinx + vterm + enchant runtime → 8/8 PASS            │
+   └────────────────────────────────────────────────────────┘
+#+end_src
+
+* What's in Emacs.app
+
+Bundle layout, relative to =Emacs.app=:
+
+#+begin_src
+Contents/
+├── MacOS/
+│   ├── Emacs                              ← the binary
+│   ├── bin/{etags,emacsclient,ebrowse}    ← ship-along utilities
+│   └── libexec/{Emacs.pdmp,hexl,...}      ← internal helpers
+├── Frameworks/
+│   ├── lib/                                ← every linked dylib
+│   │   ├── libgnutls.30.dylib              ← from conda
+│   │   ├── libtree-sitter.0.26.dylib       ← from conda
+│   │   ├── libpng16.16.dylib               ← from conda
+│   │   ├── libgmp.10.dylib                 ← from conda
+│   │   └── …
+│   │   └── enchant-2/
+│   │       └── enchant_applespell.so       ← from libs/enchant
+│   └── share/enchant-2/AppleSpell.config   ← AppleSpell runtime config
+└── Resources/
+    ├── build-manifest.org              ← build provenance: emacs SHA, conda versions,
+    │                                       configure flags, bundled dylib list
+    └── site-lisp/                          ← on Emacs's load-path
+        ├── jinx-mod.dylib                  ← (require 'jinx) → load chain
+        ├── jinx.el
+        ├── vterm-module.dylib              ← (require 'vterm) → load chain
+        ├── vterm.el
+        ├── moto-emacs-doctor.el            ← M-x moto-emacs-doctor
+        └── site-start.el                   ← autoloads doctor
+#+end_src
+
+Note: =libenchant-2= is NOT in =Frameworks/lib/= — its code is statically
+linked into =jinx-mod.dylib=.
+
+The =Frameworks/lib/= layout matches what gnulib's =--enable-relocatable=
+expects (=lib/<basename>=), but the actual relocation work is done by
+=relocate-init.c= inside =jinx-mod=, because gnulib's auto-detect is
+Linux-only on the macOS path. See =libs/jinx-mod/relocate-init.c= for
+the dladdr-based runtime prefix shim.
+
+* Known gotchas
+
+The previous list of "remember to also run X" items has been
+systemically closed:
+
+- =mise run build= runs a self-healing precheck: on drift between
+  =lockfile.toml=, =pkgs/<x>/src/=, and =src-sha.txt=, it auto-runs
+  =scripts/hydrate.sh <pkg>= and re-verifies before compiling.
+- Heavy =[deps.libs-*]= and =[deps.pkgs-emacs]= providers use =auto =
+  false=, so cheap mise verbs (=hydrate=, =doctor=, =status=, =bump=,
+  =rollback=) never trigger an Emacs compile during their prelude. Only
+  =mise run build= and =mise run validate= compile.
+- =[deps.conda-*]= providers stay =auto = true= (symlink-only,
+  millisecond cost).
+- =src-sha.txt= is the byte-deterministic sha sentinel in =[deps.*]=
+  sources; =lockfile.toml= is intentionally not listed there, so a
+  bump → bump-back to the same sha is a cache hit instead of a phantom
+  rebuild.
+- The builder scripts themselves (=emacs-app.sh=, =autotools.sh=,
+  =cc-module.sh=) call =assert_pkg_coherence= in
+  =scripts/build/_lib.sh=, which performs the same self-healing step.
+
+If something looks off, run =mise run doctor= for a cross-layer invariant
+report with per-failure remedies. (Doctor is read-only; it reports drift
+without auto-fixing, so the user can distinguish "actually drifted now"
+from "drifted but auto-fixed during the last build.")
+
+** Editing =lockfile.toml= by hand
+
+The canonical bump path is =mise run bump <pkg> <sha>= — it rewrites
+the lockfile and re-hydrates the worktree atomically.
+
+If you instead edit =lockfile.toml= directly (e.g., =vim
+pkgs/emacs/lockfile.toml=), the next =mise run build= self-heals: the
+precheck detects the drift between =lockfile.toml= and =pkgs/<x>/src/=,
+auto-runs =scripts/hydrate.sh= for the affected pkg, re-verifies
+coherence, then proceeds with the build. Single verb, no manual hydrate
+step required.
+
+#+begin_src bash
+# Edit pkgs/emacs/lockfile.toml by hand, then:
+mise run build                        # auto-hydrates + builds the new sha
+#+end_src
+
+The auto-hydrate emits a =mise run build: <pkg>: drift (...) —
+auto-hydrating …= line so the action is visible in the build log.
+
+* Fallback: bash-only baseline
+
+A pure-bash variant that produces the same =Emacs.app= lives at the
+=brainstorm/mise-conda-emacs= branch (commit =736e01b=). Five scripts
+under =scripts/conda-emacs/= chain =mise install= → =hydrate= →
+autogen/configure/make → bundle. Useful as a reference if anything
+breaks, or as a starting point for a different orchestrator. Validated
+via the same =moto-emacs-doctor= 7/7 gate.
+
+* Background
+
+- Design (current):   =docs/superpowers/specs/2026-05-06-mise-deps-replaces-buck2-design.md=
+- Plan (current):     =docs/superpowers/plans/2026-05-06-mise-deps-replaces-buck2.md=
+- Design (prior):     =docs/superpowers/specs/2026-05-03-hermetic-registry-cli-design.md= (CLI verb surface)
+- Design (original):  =docs/superpowers/specs/2026-05-01-hybrid-mise-conda-buck2-emacs-design.md= (when buck2 was the orchestrator)
+- Bash baseline (validated): =brainstorm/mise-conda-emacs @ 736e01b=

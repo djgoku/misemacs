@@ -1,0 +1,32 @@
+# jinx-mod build metadata for scripts/build/cc-module.sh.
+
+module_name = "jinx-mod"
+module_srcs = ["jinx-mod.c", "relocate-init.c"]
+
+# relocate-init.c lives at libs/jinx-mod/relocate-init.c (next to this
+# build.toml), not src/. The script copies extra_srcs into the staged
+# src/ tmpdir before compiling, so module_srcs can reference it by basename.
+extra_srcs = ["relocate-init.c"]
+
+# jinx.el ships next to jinx-mod.so in <out>/share/jinx-mod/ for emacs_app
+# to drop both into Contents/Resources/site-lisp/. (require 'jinx) finds
+# jinx.el which (require 'jinx-mod) finds the .dylib in the same dir.
+data_files = ["jinx.el"]
+
+cflags = ["-O2", "-Wall"]
+link_libs = []
+
+# gobject-2.0 added explicitly: enchant-2.pc's Requires.private only lists
+# glib-2.0 + gmodule-no-export-2.0, but libenchant-2.a calls into gobject
+# (g_param_spec_*, g_type_*) for its provider/dict types.
+pkg_config_modules = ["enchant-2", "gobject-2.0"]
+
+static_lib_deps = ["enchant"]
+static_lib_names = ["enchant-2"]
+
+# enchant brings PKG_CONFIG_PATH for enchant-2.pc and the headers/lib;
+# conda-glib + conda-libffi are required because libenchant-2.a (statically
+# linked above) calls into glib's GModule and GObject machinery, so symbols
+# must resolve at jinx-mod's link time.
+lib_deps = ["enchant", "conda-glib", "conda-libffi"]
+tool_deps = ["conda-pkg-config"]

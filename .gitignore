@@ -1,0 +1,14 @@
+buck-out/
+.cache/
+.claude/worktrees/
+libs/*/src/
+libs/*/src-commit-message.txt
+libs/*/src-sha.txt
+pkgs/*/src/
+pkgs/*/src-commit-message.txt
+pkgs/*/src-sha.txt
+libs/**/*.tar.*
+.venv/
+/build/
+/dist/
+/logs/

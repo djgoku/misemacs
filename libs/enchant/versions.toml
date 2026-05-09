@@ -1,0 +1,4 @@
+[source]
+type = "git"
+repo = "https://github.com/rrthomas/enchant"
+submodules = true

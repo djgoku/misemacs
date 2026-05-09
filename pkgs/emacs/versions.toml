@@ -1,0 +1,3 @@
+[source]
+type = "git"
+repo = "https://github.com/emacsmirror/emacs"

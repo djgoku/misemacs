@@ -1,0 +1,37 @@
+# enchant build metadata for scripts/build/autotools.sh.
+#
+# Drives `mise deps install libs-enchant`, which produces a relocatable
+# install prefix at build/enchant/ (libenchant-2.{a,dylib} +
+# enchant-2/enchant_applespell.so + lib/pkgconfig/enchant-2.pc). Consumed
+# by libs/jinx-mod's build (static link) and pkgs/emacs's bundling step.
+
+linkage = "both"
+
+configure_args = [
+  "--with-applespell",
+  "--enable-relocatable",
+  "--without-hunspell",
+  "--without-aspell",
+  "--without-voikko",
+  "--without-hspell",
+  "--without-nuspell",
+]
+
+# Library deps — CFLAGS/LDFLAGS/PKG_CONFIG_PATH from build/<name>/.
+lib_deps = ["conda-glib", "conda-libffi", "conda-zlib"]
+
+# Tool deps — PATH + ACLOCAL_PATH from build/<name>/.
+# coreutils provides GNU `join` for gnulib-tool. The autotools chain
+# (autoconf/automake/m4/libtool/vala) plus pkg-config round it out.
+tool_deps = [
+  "conda-pkg-config",
+  "conda-libtool",
+  "conda-vala",
+  "conda-autoconf",
+  "conda-automake",
+  "conda-m4",
+  "conda-coreutils",
+]
+
+pre_autogen_script = "pre-autogen.sh"
+bootstrap_script = "bootstrap.sh"
