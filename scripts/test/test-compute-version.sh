@@ -11,7 +11,10 @@ SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
 cd "$SCRATCH"
 git init -q
-git commit --allow-empty -q -m "init"
+# -c commit.gpgsign=false: scratch fixture commit, no YubiKey ceremony.
+# Without this, a global commit.gpgsign=true setup blocks the test on
+# pinentry in CI / non-interactive runs.
+git -c commit.gpgsign=false commit --allow-empty -q -m "init"
 
 today=$(date -u +%Y.%m.%d)
 
