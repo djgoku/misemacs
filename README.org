@@ -1,4 +1,4 @@
-#+TITLE: moto-registry
+#+TITLE: misemacs
 #+AUTHOR: Jonathan Carroll Otsuka
 
 * Overview
@@ -23,32 +23,34 @@ emacs build itself:
   conda-provided deps and bundles the result into a self-contained
   =Emacs.app= at =build/emacs/Emacs.app=.
 
-* Quick start
+* Install (recommended)
+
+End users get pre-built =Emacs.app= bundles via mise + aqua.
+Requires [[https://mise.jdx.dev][mise]] (>= 2026.x).
+
+#+begin_src bash
+export MISE_AQUA_REGISTRY_URL=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml
+mise use -g aqua:djgoku/misemacs@latest
+
+# Optional: expose the bundle to Spotlight / Finder / Dock
+ln -snf "$(mise where aqua:djgoku/misemacs)/Emacs.app" ~/Applications/Emacs.app
+#+end_src
+
+To uninstall the Spotlight integration: =rm ~/Applications/Emacs.app=.
+To uninstall the bundle: =mise rm aqua:djgoku/misemacs=.
+
+* Build from source (contributors)
+
+If you want to build =Emacs.app= yourself instead of installing a
+release tarball:
 
 #+begin_src bash
 mise run bootstrap                          # mise install + hydrate
-mise run build                              # mise deps install pkgs-emacs (with self-healing precheck)
+mise run build                              # builds with self-healing precheck
 mise run validate                           # 8/8 doctor + bundle self-contained gate
 
 cp -R build/emacs/Emacs.app ~/Applications/Emacs.app
 #+end_src
-
-To bump emacs (or any from-source pkg) to a new sha:
-
-#+begin_src bash
-mise run bump emacs <sha-or-prefix-or-latest>          # rewrites lockfile + hydrates
-mise run build                                         # rebuilds only what changed (blake3-keyed)
-#+end_src
-
-To roll back the previous bump (uses =git log= of the lockfile):
-
-#+begin_src bash
-mise run rollback emacs
-mise run build
-#+end_src
-
-The bundle is fully relocatable — drop it anywhere on the filesystem
-and it just works.
 
 * Verify
 
@@ -270,6 +272,22 @@ under =scripts/conda-emacs/= chain =mise install= → =hydrate= →
 autogen/configure/make → bundle. Useful as a reference if anything
 breaks, or as a starting point for a different orchestrator. Validated
 via the same =moto-emacs-doctor= 7/7 gate.
+
+* Releases
+
+CalVer tags (=YYYY.MM.DD=, e.g. =2026.05.10=) are immutable. Each
+release attaches:
+
+- =misemacs-<ver>-macos-arm64.tar.gz= — the bundle
+- =SHASUMS256.txt= — verify with =shasum -a 256 -c=
+- =build-manifest.org= — full provenance (emacs SHA, conda library
+  versions, configure flags)
+
+A Sigstore artifact-provenance attestation is published with each
+tarball; verify with =gh attestation verify ... --owner djgoku=.
+
+If a release is broken, do *not* retract — supersede. Publish a new
+CalVer release; users move forward by version pin.
 
 * Background
 
