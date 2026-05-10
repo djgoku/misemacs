@@ -84,3 +84,54 @@ echo "release.sh: wrote ${OUT_DIR}/SHASUMS256.txt"
 # --- Build manifest (verbatim copy from inside the bundle) ---
 cp "$MANIFEST" "${OUT_DIR}/build-manifest.org"
 echo "release.sh: copied build-manifest.org"
+
+# --- Auto-generated RELEASE_NOTES.md ---
+# Pulls emacs SHA + upstream commit subject + from-source pkg SHAs from
+# the lockfile.toml files committed in this repo. Conda library versions
+# come from the build manifest copy.
+emacs_sha=$(awk -F'"' '/^sha/{print $2}' pkgs/emacs/lockfile.toml)
+emacs_subject=$(git -C pkgs/emacs/src log -1 --pretty=format:%s 2>/dev/null || echo "(no upstream subject available)")
+
+enchant_sha=$(awk -F'"' '/^sha/{print $2}' libs/enchant/lockfile.toml)
+jinx_sha=$(awk -F'"' '/^sha/{print $2}' libs/jinx-mod/lockfile.toml)
+vterm_sha=$(awk -F'"' '/^sha/{print $2}' libs/emacs-libvterm/lockfile.toml)
+
+emacs_url=$(awk -F'"' '/^repo/{print $2}' pkgs/emacs/versions.toml)
+emacs_repo=${emacs_url#https://github.com/}
+enchant_url=$(awk -F'"' '/^repo/{print $2}' libs/enchant/versions.toml)
+jinx_url=$(awk -F'"' '/^repo/{print $2}' libs/jinx-mod/versions.toml)
+vterm_url=$(awk -F'"' '/^repo/{print $2}' libs/emacs-libvterm/versions.toml)
+
+short() { printf '%s' "${1:0:10}"; }
+
+cat > "${OUT_DIR}/RELEASE_NOTES.md" <<NOTES
+# misemacs ${VERSION}
+
+Hermetically-built relocatable \`Emacs.app\` for macOS, via mise + conda-forge.
+
+## Upstream
+
+- **emacs** (\`${emacs_repo}\`) @ [\`$(short "$emacs_sha")\`](${emacs_url}/commit/${emacs_sha}) — ${emacs_subject}
+
+## From-source packages
+
+| Package | SHA | Source |
+|---|---|---|
+| libs/enchant | \`$(short "$enchant_sha")\` | [${enchant_url}/commit/${enchant_sha}](${enchant_url}/commit/${enchant_sha}) |
+| libs/jinx-mod | \`$(short "$jinx_sha")\` | [${jinx_url}/commit/${jinx_sha}](${jinx_url}/commit/${jinx_sha}) |
+| libs/emacs-libvterm | \`$(short "$vterm_sha")\` | [${vterm_url}/commit/${vterm_sha}](${vterm_url}/commit/${vterm_sha}) |
+
+## Verify
+
+\`\`\`
+shasum -a 256 -c SHASUMS256.txt
+gh attestation verify ${ASSET_BASE}.tar.gz --owner djgoku
+\`\`\`
+
+## Conda libraries
+
+Pinned via \`mise.lock\`. Full list in the attached \`build-manifest.org\`.
+
+NOTES
+
+echo "release.sh: wrote ${OUT_DIR}/RELEASE_NOTES.md"
