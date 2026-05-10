@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/registry.json
+packages:
+  - type: github_release
+    repo_owner: djgoku
+    repo_name: misemacs
+    description: Hermetically-built relocatable Emacs.app for macOS, via mise + conda-forge
+    asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
+    format: tar.gz
+    checksum:
+      type: github_release
+      asset: SHASUMS256.txt
+      algorithm: sha256
+    supported_envs:
+      - darwin/arm64
+    overrides:
+      - goos: darwin
+        files:
+          - name: emacs
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/Emacs"
+          - name: emacsclient
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/emacsclient"
+          - name: etags
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/etags"
+          - name: ebrowse
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/ebrowse"
+    replacements:
+      darwin: macos
