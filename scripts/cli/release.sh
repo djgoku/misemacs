@@ -46,4 +46,31 @@ TARBALL="${OUT_DIR}/${ASSET_BASE}.tar.gz"
 mkdir -p "$OUT_DIR"
 
 echo "release.sh: preconditions OK (version=$VERSION, asset_base=$ASSET_BASE)"
-# subsequent steps (tarball, checksums, notes) added in later tasks
+
+# --- Stage Emacs.app under a wrapper directory matching ASSET_BASE ---
+# (aqua's {{.AssetWithoutExt}} template expects this top-level layout.)
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
+
+mkdir -p "$STAGE/$ASSET_BASE"
+# COPYFILE_DISABLE=1 prevents AppleDouble (._*) sidecar files in the copy.
+COPYFILE_DISABLE=1 cp -R "$APP" "$STAGE/$ASSET_BASE/Emacs.app"
+
+# --- Deterministic tarball with GNU tar from conda:tar ---
+# GNU tar (gtar) supports --sort=name; macOS BSD tar does not.
+GTAR="$(mise where conda:tar)/bin/tar"
+[ -x "$GTAR" ] || { echo "release.sh: GNU tar from conda:tar not found at $GTAR" >&2; exit 1; }
+
+# Produce the .tar uncompressed first, then gzip with -n (no embedded mtime/filename).
+COPYFILE_DISABLE=1 "$GTAR" \
+    --create \
+    --file - \
+    --directory "$STAGE" \
+    --mtime=@0 \
+    --sort=name \
+    --owner=0 --group=0 --numeric-owner \
+    --format=ustar \
+    "$ASSET_BASE" \
+    | gzip -n > "$TARBALL"
+
+echo "release.sh: produced $TARBALL ($(du -h "$TARBALL" | cut -f1))"
