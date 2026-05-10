@@ -74,3 +74,13 @@ COPYFILE_DISABLE=1 "$GTAR" \
     | gzip -n > "$TARBALL"
 
 echo "release.sh: produced $TARBALL ($(du -h "$TARBALL" | cut -f1))"
+
+# --- SHA256 checksums ---
+# `shasum -a 256` emits two-space-separated <hash><sp><sp><filename>.
+# We invoke from inside OUT_DIR so the filename is bare (no path prefix).
+( cd "$OUT_DIR" && shasum -a 256 "${ASSET_BASE}.tar.gz" ) > "${OUT_DIR}/SHASUMS256.txt"
+echo "release.sh: wrote ${OUT_DIR}/SHASUMS256.txt"
+
+# --- Build manifest (verbatim copy from inside the bundle) ---
+cp "$MANIFEST" "${OUT_DIR}/build-manifest.org"
+echo "release.sh: copied build-manifest.org"
