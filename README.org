@@ -81,7 +81,7 @@ Both should exit 0; the doctor reports 8/8 PASS.
 #+begin_src
 mise.toml
 ├── [tools]               — perl, python, conda:* (link-time deps + build tools)
-├── [tasks.*]             — user-facing verbs: bootstrap, build, bump, rollback,
+├── [tasks.*]             — user-facing verbs: bootstrap, build, bump,
 │                            doctor, status, validate, hydrate, test-cli, …
 └── [deps.*]              — experimental mise providers; the build graph
     ├── conda-glib …      — scripts/build/conda-prefix.sh <X>
@@ -226,8 +226,8 @@ systemically closed:
   =lockfile.toml=, =pkgs/<x>/src/=, and =src-sha.txt=, it auto-runs
   =scripts/hydrate.sh <pkg>= and re-verifies before compiling.
 - Heavy =[deps.libs-*]= and =[deps.pkgs-emacs]= providers use =auto =
-  false=, so cheap mise verbs (=hydrate=, =doctor=, =status=, =bump=,
-  =rollback=) never trigger an Emacs compile during their prelude. Only
+  false=, so cheap mise verbs (=hydrate=, =doctor=, =status=, =bump=)
+  never trigger an Emacs compile during their prelude. Only
   =mise run build= and =mise run validate= compile.
 - =[deps.conda-*]= providers stay =auto = true= (symlink-only,
   millisecond cost).

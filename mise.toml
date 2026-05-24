@@ -61,30 +61,16 @@ run = 'bash scripts/hydrate.sh "${@:-}"'
 description = "One-shot v1 → v2 lockfile migration. Idempotent."
 run = "bash scripts/migrate-lockfiles.sh"
 
-[tasks.rollback]
-description = "Roll back a from-source package to its previous lockfile state. Usage: mise run rollback <pkg>."
-run = 'bash scripts/cli/rollback.sh "$@"'
-
 [tasks.status]
 description = "One-glance read of in-sync state across all packages."
 run = "bash scripts/cli/status.sh"
 
-# Order: test-roundtrip is the broadest integration test (bump/build/rollback)
-# and runs first as a comprehensive regression check; unit tests follow;
-# test-self-heal-precheck is the focused Phase 2 integration test, run after
-# the unit tests; the new release-packaging tests run last.
-#
-# test-roundtrip is currently disabled in misemacs because rollback requires
-# ≥2 commits in pkgs/emacs/lockfile.toml's git history. misemacs starts with
-# 1 commit (the squashed initial commit). Re-enable once enough release
-# history accumulates, OR fix scripts/cli/rollback.sh to handle the
-# single-commit case (e.g., by capturing pre-bump state instead of relying
-# on git log of prior commits).
+# Order: unit tests first, then the focused self-heal integration test,
+# then the release-packaging tests last.
 [tasks.test-cli]
-description = "Run all CLI/registry round-trip, self-heal, unit, and release-packaging tests."
+description = "Run self-heal, unit, and release-packaging tests."
 run = """
 set -e
-# bash scripts/test/test-roundtrip.sh    # disabled in fresh repo — see above
 bash scripts/test/test-conda-input-hash.sh
 bash scripts/test/test-build-lib.sh
 bash scripts/test/test-cheap-verbs-fast.sh
