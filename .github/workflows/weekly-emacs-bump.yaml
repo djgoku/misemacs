@@ -39,7 +39,9 @@ jobs:
 
       - name: Validate new build
         if: steps.bump.outputs.changed == 'true'
-        run: mise run validate
+        run: |
+          mise run build
+          mise run validate
 
       - name: Commit and push the bump
         if: steps.bump.outputs.changed == 'true'

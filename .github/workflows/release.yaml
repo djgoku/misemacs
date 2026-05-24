@@ -45,7 +45,9 @@ jobs:
           fi
 
       - name: Build and validate Emacs.app
-        run: mise run validate
+        run: |
+          mise run build
+          mise run validate
 
       - name: Package release artifacts
         run: bash scripts/cli/release.sh "$VERSION"
