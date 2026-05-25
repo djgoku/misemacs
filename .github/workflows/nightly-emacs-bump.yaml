@@ -1,7 +1,7 @@
-name: weekly-emacs-bump
+name: nightly-emacs-bump
 on:
   schedule:
-    - cron: "0 14 * * 1"   # Mondays 14:00 UTC
+    - cron: "0 14 * * *"   # daily 14:00 UTC
   workflow_dispatch: {}
 
 permissions:
@@ -10,7 +10,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: weekly-emacs-bump
+  group: nightly-emacs-bump
   cancel-in-progress: false
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
           mise run bump emacs latest
           if git diff --quiet pkgs/emacs/lockfile.toml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No new emacs SHA; nothing to release this week."
+            echo "::notice::No new emacs SHA; nothing to release today."
           else
             new_sha=$(awk -F'"' '/^sha/{print $2}' pkgs/emacs/lockfile.toml)
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -48,7 +48,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(pkgs/emacs): weekly bump to ${{ steps.bump.outputs.new_sha }}"
+          git commit -am "chore(pkgs/emacs): nightly bump to ${{ steps.bump.outputs.new_sha }}"
           # Absorb any human commit that landed during the build window. The
           # cron's commit only touches pkgs/emacs/lockfile.toml; rebase
           # conflicts only when a human bumped emacs in parallel — fail and
@@ -71,7 +71,7 @@ jobs:
               owner: context.repo.owner,
               repo:  context.repo.repo,
               state: "open",
-              labels: "weekly-bump",
+              labels: "nightly-bump",
             });
             const link = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = `Workflow run: ${link}`;
@@ -79,13 +79,13 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: existing[0].number,
-                body: `Another weekly-bump failure. ${body}`,
+                body: `Another nightly-bump failure. ${body}`,
               });
             } else {
               await github.rest.issues.create({
                 owner: context.repo.owner, repo: context.repo.repo,
-                title: `Weekly emacs bump failed: run ${context.runId}`,
+                title: `Nightly emacs bump failed: run ${context.runId}`,
                 body,
-                labels: ["weekly-bump", "needs-triage"],
+                labels: ["nightly-bump", "needs-triage"],
               });
             }
