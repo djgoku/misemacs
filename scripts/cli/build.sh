@@ -66,13 +66,24 @@ while IFS= read -r tool; do
 done < <(awk -F'"' '/^"conda:/ { print $2 }' "$ROOT/mise.toml" | sed 's/^conda://')
 
 # --- Build ---
-# `mise deps install <X>` traverses X's `depends` graph. For target=emacs
-# or emacs-mac, that pulls in libs-* (auto=false) and conda-* (auto=true)
-# transitively; mise's content-addressed freshness ensures only stale deps
-# actually run. We DON'T use the no-arg form here because it would build
-# ALL auto=false deps — both pkgs-emacs AND pkgs-emacs-mac — when the user
-# asked for just one flavor.
-mise deps install "$dep_name"
+# pkgs-emacs / pkgs-emacs-mac depend on the libs-* providers, which are
+# auto=false. `mise deps install <X>` runs X plus its auto=true (conda-*)
+# deps, but does NOT cascade through auto=false depends — so on a clean
+# build/ the libs never build and the emacs compile dies on a missing
+# build/enchant. Build the shared libs explicitly before the selected pkg
+# (naming one flavor's pkg avoids building the other); content-addressed
+# freshness skips libs that are already current.
+case "$target" in
+    emacs|emacs-mac)
+        for lib in libs-enchant libs-jinx-mod libs-emacs-libvterm; do
+            mise deps install "$lib"
+        done
+        mise deps install "$dep_name"
+        ;;
+    *)
+        mise deps install "$dep_name"
+        ;;
+esac
 
 # --- Sentinel for `mise run status` "last built" ---
 mkdir -p "$ROOT/.cache/last-built"
