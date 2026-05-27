@@ -29,7 +29,6 @@ End users get pre-built =Emacs.app= bundles via mise + aqua.
 Requires [[https://mise.jdx.dev][mise]] (>= 2026.x).
 
 #+begin_src bash
-export MISE_AQUA_REGISTRY_URL=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml
 mise use -g aqua:djgoku/misemacs@latest
 
 # Optional: expose the bundle to Spotlight / Finder / Dock
