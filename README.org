@@ -3,11 +3,12 @@
 
 * Overview
 
-moto-registry produces a fully relocatable =Emacs.app= for macOS, built
-end-to-end via mise. Every C library and build tool comes from
-conda-forge via mise's conda backend; mise's experimental =[deps.*]=
-provider system orchestrates the build graph (with blake3 content-hash
-freshness checks).
+misemacs builds multiple Emacs /flavors/ (=<port>-<line>=) — currently
+=emacs-master= (mainline GNU Emacs, NS port) and =emacs-mac-master= (the Mac
+port) — each a fully relocatable =Emacs.app= for macOS, built end-to-end via
+mise. Every C library and build tool comes from conda-forge via mise's conda
+backend; mise's experimental =[deps.*]= provider system orchestrates the build
+graph (with blake3 content-hash freshness checks).
 
 Three from-source packages handle the emacs-specific glue, plus the
 emacs build itself:
@@ -19,9 +20,9 @@ emacs build itself:
   jinx spell-check package.
 - =libs/emacs-libvterm= — Emacs dynamic module wrapping libvterm for
   the vterm terminal package.
-- =pkgs/emacs= — runs Emacs's autogen+configure+make against the
+- =pkgs/<flavor>= — runs Emacs's autogen+configure+make against the
   conda-provided deps and bundles the result into a self-contained
-  =Emacs.app= at =build/emacs/Emacs.app=.
+  =Emacs.app= at =build/<flavor>/Emacs.app=.
 
 * Install (recommended)
 
@@ -29,14 +30,66 @@ End users get pre-built =Emacs.app= bundles via mise + aqua.
 Requires [[https://mise.jdx.dev][mise]] (>= 2026.x).
 
 #+begin_src bash
-mise use -g aqua:djgoku/misemacs@latest
+# Latest build of a flavor:
+mise use -g aqua:djgoku/misemacs/emacs-mac-master@latest
+mise use -g aqua:djgoku/misemacs/emacs-master@latest
 
-# Optional: expose the bundle to Spotlight / Finder / Dock
-ln -snf "$(mise where aqua:djgoku/misemacs)/Emacs.app" ~/Applications/Emacs.app
+# Pin an exact build (umbrella package, java-style flavored version):
+mise use -g aqua:djgoku/misemacs@emacs-mac-master-2026.05.27
+
+# Browse every flavor + build:
+mise ls-remote aqua:djgoku/misemacs
+
+# Expose to Spotlight/Finder/Dock:
+ln -snf "$(mise where aqua:djgoku/misemacs/emacs-mac-master)/Emacs.app" ~/Applications/Emacs.app
 #+end_src
 
 To uninstall the Spotlight integration: =rm ~/Applications/Emacs.app=.
-To uninstall the bundle: =mise rm aqua:djgoku/misemacs=.
+To uninstall a flavor: =mise rm aqua:djgoku/misemacs/emacs-mac-master=.
+
+* Flavors
+
+| Flavor (= tag prefix) | Port          | Line   | Source                                        |
+|-----------------------+---------------+--------+-----------------------------------------------|
+| emacs-master          | mainline (NS) | master | emacsmirror/emacs @ master                    |
+| emacs-mac-master      | Mac port      | master | jdtsmith/emacs-mac @ emacs-mac-gnu_master_exp |
+
+Releases are tagged =<flavor>-<calver>= (e.g. =emacs-mac-master-2026.05.27=);
+each tag is one GitHub release carrying =misemacs-<flavor>-<calver>-macos-arm64.tar.gz=.
+
+* Adding a flavor
+
+A flavor is =<port>-<line>=. To add one:
+
+1. *Source.* Create =pkgs/<flavor>/versions.toml=:
+   #+begin_src toml
+   [source]
+   type = "git"
+   repo = "https://github.com/<owner>/<repo>"
+   ref  = "<branch-or-tag>"
+   #+end_src
+   Examples:
+   - =emacs-mac-30=:  repo =jdtsmith/emacs-mac=, ref =emacs-mac-30_1_exp=
+   - =emacs-31=:      repo =emacsmirror/emacs=,  ref =emacs-31=
+   - =emacs-30=:      repo =emacsmirror/emacs=,  ref =emacs-30=
+   - =emacs-29=:      repo =emacsmirror/emacs=,  ref =emacs-29=
+2. *build.toml.* Copy from the nearest existing flavor (Mac lines copy
+   =pkgs/emacs-mac-master=; NS lines copy =pkgs/emacs-master=). Older NS lines
+   may need =configure_args= tweaks — build, read the error, adjust.
+3. *lockfile.toml.* =schema_version = 2=; then =mise run bump <flavor> latest=
+   (resolves the =ref=) to pin the sha and hydrate.
+4. *Build graph.* Add =[deps.pkgs-<flavor>]= to =mise.toml= (copy a sibling,
+   repoint =sources=/=outputs=/=run= to =<flavor>=); add =<flavor>= to the case
+   and =PKGS= in =scripts/cli/build.sh=, to =PKG_ALIASES= in =scripts/cli/_lib.sh=,
+   and to the =PKGS= lists in =doctor.sh= / =status.sh= / =migrate-lockfiles.sh=;
+   add it to the =validate= variant loop in =mise.toml=.
+5. *CI.* Add =<flavor>= to the =release.yaml= matrix and the
+   =nightly-emacs-bump.yaml= bump loop.
+6. *Registry.* In the aqua-registry fork add
+   =pkgs/djgoku/misemacs/<flavor>/registry.yaml= with
+   =version_filter: Version startsWith "<flavor>-"= and
+   =version_prefix: "<flavor>-"=; test via =MISE_AQUA_REGISTRY_URL=; PR upstream.
+7. *README.* Add a row to the Flavors table above.
 
 * Build from source (contributors)
 
@@ -44,12 +97,14 @@ If you want to build =Emacs.app= yourself instead of installing a
 release tarball:
 
 #+begin_src bash
-mise run bootstrap                          # mise install + hydrate
-mise run build                              # builds with self-healing precheck
-mise run validate                           # 8/8 doctor + bundle self-contained gate
+mise run bootstrap                                  # mise install + hydrate
+mise run build emacs-master                         # builds with self-healing precheck
+mise run validate                      # 8/8 doctor + bundle self-contained gate
 
-cp -R build/emacs/Emacs.app ~/Applications/Emacs.app
+cp -R build/emacs-master/Emacs.app ~/Applications/Emacs.app
 #+end_src
+
+Substitute =emacs-mac-master= (or any other flavor) for =emacs-master= as appropriate.
 
 * Verify
 
@@ -65,15 +120,16 @@ Or run them individually:
 # Static analysis: every Mach-O reference inside the bundle must be
 # either @-relative or under /System / /usr/lib. Catches absolute
 # conda-mise paths leaking into the bundle.
-bash scripts/verify-bundle-self-contained.sh build/emacs/Emacs.app
+bash scripts/verify-bundle-self-contained.sh build/emacs-master/Emacs.app
 
 # Runtime: load jinx-mod + vterm-module, confirm enchant returns
 # at least one language. (Inside Emacs: M-x moto-emacs-doctor)
-build/emacs/Emacs.app/Contents/MacOS/Emacs -batch \
+build/emacs-master/Emacs.app/Contents/MacOS/Emacs -batch \
   -l moto-emacs-doctor -f moto-emacs-doctor-batch
 #+end_src
 
 Both should exit 0; the doctor reports 8/8 PASS.
+Substitute =emacs-mac-master= (or any other flavor) as appropriate.
 
 * Architecture
 
@@ -89,7 +145,7 @@ mise.toml
     ├── libs-jinx-mod     — scripts/build/cc-module.sh libs/jinx-mod
     ├── libs-emacs-libvterm
     │                     — scripts/build/cc-module.sh libs/emacs-libvterm
-    └── pkgs-emacs        — scripts/build/emacs-app.sh pkgs/emacs
+    └── pkgs-<flavor>     — scripts/build/emacs-app.sh pkgs/<flavor>
 
 scripts/build/
 ├── _lib.sh               — shared helpers: resolve_dep_prefixes,
@@ -102,7 +158,7 @@ scripts/build/
 ├── cc-module.sh          — compiles a single .so from C sources, with
 │                            optional pkg-config + static-archive linking
 └── emacs-app.sh          — runs Emacs's autogen+configure+make and bundles
-                             a relocatable .app into build/emacs/Emacs.app
+                             a relocatable .app into build/<flavor>/Emacs.app
 
 libs/<X>/
 ├── build.toml            — per-target build metadata (linkage, configure_args,
@@ -112,7 +168,7 @@ libs/<X>/
 ├── pre-autogen.sh        — optional companion (e.g., libs/enchant)
 └── bootstrap.sh          — optional companion (e.g., libs/enchant)
 
-pkgs/emacs/
+pkgs/<flavor>/
 ├── build.toml            — emacs-specific knobs (configure flags, bundle_*,
 │                            *_dep names, lib_deps, tool_deps)
 └── (same lockfile.toml, versions.toml shape as libs/)
@@ -138,23 +194,23 @@ scripts/
         │                                 │
         └──────────────┬──────────────────┘
                        ▼
-                 mise run build
+                 mise run build <flavor>
                        │
                        ├── [tasks.build] → scripts/cli/build.sh
                        │       │
                        │       └── self-healing precheck (lockfile coherence,
                        │             worktree HEAD, conda env presence)
                        │
-                       └── mise deps install pkgs-emacs
+                       └── mise deps install pkgs-<flavor>
                               ├── [deps.conda-*]   (parallel; auto = true)  → build/conda-<X>/
                               ├── [deps.libs-enchant]                        → build/enchant/
                               ├── [deps.libs-jinx-mod]                       → build/jinx-mod/
                               ├── [deps.libs-emacs-libvterm]                 → build/emacs-libvterm/
-                              └── [deps.pkgs-emacs]                          → build/emacs/Emacs.app
+                              └── [deps.pkgs-<flavor>]                       → build/<flavor>/Emacs.app
                                        │
                                        │  emacs-app.sh:
                                        │    autogen → configure → make bootstrap → install
-                                       │    cp -R nextstep/Emacs.app → build/emacs/Emacs.app
+                                       │    cp -R nextstep/Emacs.app → build/<flavor>/Emacs.app
                                        │    bundle_one()  recursive @rpath walker pulls every
                                        │                  linked dylib into Frameworks/lib/
                                        │    strip absolute LC_RPATHs, add @-relative
@@ -221,9 +277,9 @@ the dladdr-based runtime prefix shim.
 The previous list of "remember to also run X" items has been
 systemically closed:
 
-- =mise run build= runs a self-healing precheck: on drift between
-  =lockfile.toml=, =pkgs/<x>/src/=, and =src-sha.txt=, it auto-runs
-  =scripts/hydrate.sh <pkg>= and re-verifies before compiling.
+- =mise run build <flavor>= runs a self-healing precheck: on drift between
+  =lockfile.toml=, =pkgs/<flavor>/src/=, and =src-sha.txt=, it auto-runs
+  =scripts/hydrate.sh <flavor>= and re-verifies before compiling.
 - Heavy =[deps.libs-*]= and =[deps.pkgs-emacs]= providers use =auto =
   false=, so cheap mise verbs (=hydrate=, =doctor=, =status=, =bump=)
   never trigger an Emacs compile during their prelude. Only
@@ -249,15 +305,15 @@ The canonical bump path is =mise run bump <pkg> <sha>= — it rewrites
 the lockfile and re-hydrates the worktree atomically.
 
 If you instead edit =lockfile.toml= directly (e.g., =vim
-pkgs/emacs/lockfile.toml=), the next =mise run build= self-heals: the
-precheck detects the drift between =lockfile.toml= and =pkgs/<x>/src/=,
-auto-runs =scripts/hydrate.sh= for the affected pkg, re-verifies
-coherence, then proceeds with the build. Single verb, no manual hydrate
-step required.
+pkgs/emacs-master/lockfile.toml=), the next =mise run build <flavor>=
+self-heals: the precheck detects the drift between =lockfile.toml= and
+=pkgs/<flavor>/src/=, auto-runs =scripts/hydrate.sh= for the affected pkg,
+re-verifies coherence, then proceeds with the build. Single verb, no manual
+hydrate step required.
 
 #+begin_src bash
-# Edit pkgs/emacs/lockfile.toml by hand, then:
-mise run build                        # auto-hydrates + builds the new sha
+# Edit pkgs/emacs-master/lockfile.toml by hand, then:
+mise run build emacs-master           # auto-hydrates + builds the new sha
 #+end_src
 
 The auto-hydrate emits a =mise run build: <pkg>: drift (...) —
@@ -274,19 +330,22 @@ via the same =moto-emacs-doctor= 7/7 gate.
 
 * Releases
 
-CalVer tags (=YYYY.MM.DD=, e.g. =2026.05.10=) are immutable. Each
-release attaches:
+Tags are =<flavor>-<calver>= (e.g. =emacs-mac-master-2026.05.27=) and are
+immutable. Each tag is one GitHub release carrying:
 
-- =misemacs-<ver>-macos-arm64.tar.gz= — the bundle
+- =misemacs-<flavor>-<calver>-macos-arm64.tar.gz= — the bundle
 - =SHASUMS256.txt= — verify with =shasum -a 256 -c=
 - =build-manifest.org= — full provenance (emacs SHA, conda library
   versions, configure flags)
+
+The move to flavored tags was a clean cutover; the prior bare-CalVer
+release scheme is superseded (old bare tags may be deleted).
 
 A Sigstore artifact-provenance attestation is published with each
 tarball; verify with =gh attestation verify ... --owner djgoku=.
 
 If a release is broken, do *not* retract — supersede. Publish a new
-CalVer release; users move forward by version pin.
+flavored CalVer release; users move forward by version pin.
 
 * Background
 
