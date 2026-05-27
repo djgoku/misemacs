@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-release-packaging.sh — end-to-end test of release.sh.
-# Requires build/emacs/Emacs.app to already exist (mise run validate first).
+# Requires build/<flavor>/Emacs.app to already exist (mise run build <flavor> first).
 #
 # Asserts:
 #   1. release.sh succeeds and produces 4 expected files.
@@ -13,51 +13,36 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-[ -d "build/emacs/Emacs.app" ] || {
-    echo "FAIL: build/emacs/Emacs.app not found — run 'mise run validate' first"
-    exit 1
-}
+FLAVORS=(emacs-master emacs-mac-master)
+ran=0
+for FLAVOR in "${FLAVORS[@]}"; do
+    [ -d "build/$FLAVOR/Emacs.app" ] || continue
+    ran=1
+    VERSION="$FLAVOR-0.0.0-test"
+    OUT_DIR="build/release/${VERSION}"
+    ASSET_BASE="misemacs-${VERSION}-macos-arm64"
+    TARBALL="${OUT_DIR}/${ASSET_BASE}.tar.gz"
 
-VERSION="0.0.0-test"
-OUT_DIR="build/release/${VERSION}"
-ASSET_BASE="misemacs-${VERSION}-macos-arm64"
-TARBALL="${OUT_DIR}/${ASSET_BASE}.tar.gz"
+    rm -rf "$OUT_DIR"
+    MISEMACS_RELEASE_ALLOW_DIRTY=1 bash scripts/cli/release.sh "$FLAVOR" "$VERSION" >/dev/null
+    [ -f "$TARBALL" ] && [ -f "${OUT_DIR}/SHASUMS256.txt" ] \
+        && [ -f "${OUT_DIR}/build-manifest.org" ] && [ -f "${OUT_DIR}/RELEASE_NOTES.md" ] \
+        || { echo "FAIL[$FLAVOR]: missing release files"; exit 1; }
+    ( cd "$OUT_DIR" && shasum -a 256 -c SHASUMS256.txt >/dev/null ) \
+        || { echo "FAIL[$FLAVOR]: SHASUMS256 verify"; exit 1; }
 
-# --- Step 1: produce the release ---
-rm -rf "$OUT_DIR"
-MISEMACS_RELEASE_ALLOW_DIRTY=1 bash scripts/cli/release.sh "$VERSION" >/dev/null
-
-[ -f "$TARBALL" ]                            || { echo "FAIL: tarball missing"; exit 1; }
-[ -f "${OUT_DIR}/SHASUMS256.txt" ]           || { echo "FAIL: SHASUMS256.txt missing"; exit 1; }
-[ -f "${OUT_DIR}/build-manifest.org" ]       || { echo "FAIL: build-manifest.org missing"; exit 1; }
-[ -f "${OUT_DIR}/RELEASE_NOTES.md" ]         || { echo "FAIL: RELEASE_NOTES.md missing"; exit 1; }
-echo "PASS: release.sh produced 4 expected files"
-
-# --- Step 2: SHA256 verifies ---
-( cd "$OUT_DIR" && shasum -a 256 -c SHASUMS256.txt >/dev/null ) \
-    || { echo "FAIL: SHASUMS256.txt verification failed"; exit 1; }
-echo "PASS: SHA256 verifies"
-
-# --- Step 3: extract the tarball ---
-DUMP=$(mktemp -d)
-trap 'rm -rf "$DUMP" "$OUT_DIR"' EXIT
-
-tar -xzf "$TARBALL" -C "$DUMP"
-EXTRACTED_APP="$DUMP/${ASSET_BASE}/Emacs.app"
-[ -d "$EXTRACTED_APP" ]                                || { echo "FAIL: extracted Emacs.app not found"; exit 1; }
-[ -x "$EXTRACTED_APP/Contents/MacOS/Emacs" ]           || { echo "FAIL: extracted Emacs binary not executable"; exit 1; }
-echo "PASS: tarball extracts to runnable bundle"
-
-# --- Step 4: verify-bundle-self-contained.sh against extracted bundle ---
-bash scripts/verify-bundle-self-contained.sh "$EXTRACTED_APP" \
-    || { echo "FAIL: extracted bundle is not self-contained (xattr or rpath damage)"; exit 1; }
-echo "PASS: extracted bundle self-contained"
-
-# --- Step 5: moto-emacs-doctor batch against extracted bundle ---
-"$EXTRACTED_APP/Contents/MacOS/Emacs" -Q -batch \
-    -L "$EXTRACTED_APP/Contents/Resources/site-lisp" \
-    -l moto-emacs-doctor -f moto-emacs-doctor-batch \
-    || { echo "FAIL: doctor failed against extracted bundle"; exit 1; }
-echo "PASS: doctor 8/8 against extracted bundle"
-
+    DUMP=$(mktemp -d)
+    trap 'rm -rf "$DUMP" "$OUT_DIR"' EXIT   # safety net for any unguarded set -e exit
+    tar -xzf "$TARBALL" -C "$DUMP"
+    APP="$DUMP/${ASSET_BASE}/Emacs.app"
+    [ -x "$APP/Contents/MacOS/Emacs" ] || { echo "FAIL[$FLAVOR]: no runnable Emacs"; rm -rf "$DUMP"; exit 1; }
+    bash scripts/verify-bundle-self-contained.sh "$APP" \
+        || { echo "FAIL[$FLAVOR]: not self-contained"; rm -rf "$DUMP"; exit 1; }
+    "$APP/Contents/MacOS/Emacs" -Q -batch -L "$APP/Contents/Resources/site-lisp" \
+        -l moto-emacs-doctor -f moto-emacs-doctor-batch \
+        || { echo "FAIL[$FLAVOR]: doctor"; rm -rf "$DUMP"; exit 1; }
+    rm -rf "$DUMP" "$OUT_DIR"
+    echo "PASS[$FLAVOR]: release packaging"
+done
+[ "$ran" = 1 ] || { echo "FAIL: no built flavor found — run 'mise run build <flavor>' first"; exit 1; }
 echo "PASS test-release-packaging.sh"

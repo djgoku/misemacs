@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# release.sh — package build/emacs/Emacs.app for a misemacs release.
+# release.sh — package build/<flavor>/Emacs.app for a misemacs release.
 #
-# Usage: release.sh <version>
+# Usage: release.sh <flavor> <version>
 #
 # Produces, under build/release/<version>/:
 #   misemacs-<version>-macos-arm64.tar.gz   (the bundle, deterministic gzip-tarball)
@@ -10,13 +10,15 @@
 #   RELEASE_NOTES.md                         (auto-generated body for gh release)
 set -euo pipefail
 
-VERSION="${1:-}"
-[ -n "$VERSION" ] || { echo "release.sh: missing version argument" >&2; exit 1; }
+FLAVOR="${1:-}"
+VERSION="${2:-}"
+[ -n "$FLAVOR" ]  || { echo "release.sh: missing flavor argument (e.g. emacs-master)" >&2; exit 1; }
+[ -n "$VERSION" ] || { echo "release.sh: missing version argument (e.g. emacs-master-2026.05.27)" >&2; exit 1; }
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-APP="build/emacs/Emacs.app"
+APP="build/$FLAVOR/Emacs.app"
 EMACS_BIN="$APP/Contents/MacOS/Emacs"
 MANIFEST="$APP/Contents/Resources/build-manifest.org"
 
@@ -89,15 +91,15 @@ echo "release.sh: copied build-manifest.org"
 # Pulls emacs SHA + upstream commit subject + from-source pkg SHAs from
 # the lockfile.toml files committed in this repo. Conda library versions
 # come from the build manifest copy.
-emacs_sha=$(awk -F'"' '/^sha/{print $2}' pkgs/emacs/lockfile.toml)
-emacs_subject=$(git -C pkgs/emacs/src log -1 --pretty=format:%s 2>/dev/null || echo "(no upstream subject available)")
+emacs_sha=$(awk -F'"' '/^sha/{print $2}' "pkgs/$FLAVOR/lockfile.toml")
+emacs_subject=$(git -C "pkgs/$FLAVOR/src" log -1 --pretty=format:%s 2>/dev/null || echo "(no upstream subject available)")
+emacs_url=$(awk -F'"' '/^repo/{print $2}' "pkgs/$FLAVOR/versions.toml")
+emacs_ref=$(awk -F'"' '/^ref/{print $2}' "pkgs/$FLAVOR/versions.toml")
+emacs_repo=${emacs_url#https://github.com/}
 
 enchant_sha=$(awk -F'"' '/^sha/{print $2}' libs/enchant/lockfile.toml)
 jinx_sha=$(awk -F'"' '/^sha/{print $2}' libs/jinx-mod/lockfile.toml)
 vterm_sha=$(awk -F'"' '/^sha/{print $2}' libs/emacs-libvterm/lockfile.toml)
-
-emacs_url=$(awk -F'"' '/^repo/{print $2}' pkgs/emacs/versions.toml)
-emacs_repo=${emacs_url#https://github.com/}
 enchant_url=$(awk -F'"' '/^repo/{print $2}' libs/enchant/versions.toml)
 jinx_url=$(awk -F'"' '/^repo/{print $2}' libs/jinx-mod/versions.toml)
 vterm_url=$(awk -F'"' '/^repo/{print $2}' libs/emacs-libvterm/versions.toml)
@@ -111,7 +113,7 @@ Hermetically-built relocatable \`Emacs.app\` for macOS, via mise + conda-forge.
 
 ## Upstream
 
-- **emacs** (\`${emacs_repo}\`) @ [\`$(short "$emacs_sha")\`](${emacs_url}/commit/${emacs_sha}) — ${emacs_subject}
+- **${FLAVOR}** (\`${emacs_repo}\` @ \`${emacs_ref}\`) @ [\`$(short "$emacs_sha")\`](${emacs_url}/commit/${emacs_sha}) — ${emacs_subject}
 
 ## From-source packages
 

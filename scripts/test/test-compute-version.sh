@@ -18,31 +18,43 @@ git -c commit.gpgsign=false commit --allow-empty -q -m "init"
 
 today=$(date -u +%Y.%m.%d)
 
-# 1. Explicit valid version → echoed back.
-out=$(bash "$SCRIPT" "2026.05.09")
-[ "$out" = "VERSION=2026.05.09" ] || { echo "FAIL explicit valid: got '$out'"; exit 1; }
+flavor="emacs-mac-master"
 
-# 2. Explicit valid version with suffix.
-out=$(bash "$SCRIPT" "2026.05.09.3")
-[ "$out" = "VERSION=2026.05.09.3" ] || { echo "FAIL explicit suffix: got '$out'"; exit 1; }
+# 1. Explicit valid calver -> <flavor>-<calver>.
+out=$(bash "$SCRIPT" "$flavor" "2026.05.09")
+[ "$out" = "VERSION=$flavor-2026.05.09" ] || { echo "FAIL explicit valid: got '$out'"; exit 1; }
 
-# 3. Explicit invalid version → exit nonzero.
-if bash "$SCRIPT" "v1.0.0" >/dev/null 2>&1; then
+# 2. Explicit calver with suffix.
+out=$(bash "$SCRIPT" "$flavor" "2026.05.09.3")
+[ "$out" = "VERSION=$flavor-2026.05.09.3" ] || { echo "FAIL explicit suffix: got '$out'"; exit 1; }
+
+# 3. Invalid calver -> nonzero.
+if bash "$SCRIPT" "$flavor" "v1.0.0" >/dev/null 2>&1; then
     echo "FAIL invalid: should have rejected v1.0.0"; exit 1
 fi
 
-# 4. No input, no existing tags → today's date.
-out=$(bash "$SCRIPT")
-[ "$out" = "VERSION=$today" ] || { echo "FAIL no-input: got '$out', expected VERSION=$today"; exit 1; }
+# 3b. Missing flavor -> nonzero.
+if bash "$SCRIPT" >/dev/null 2>&1; then
+    echo "FAIL: should require a flavor"; exit 1
+fi
 
-# 5. No input, today's tag exists → today.1
-git tag "$today"
-out=$(bash "$SCRIPT")
-[ "$out" = "VERSION=$today.1" ] || { echo "FAIL collision-1: got '$out'"; exit 1; }
+# 4. No calver, no tags -> <flavor>-today.
+out=$(bash "$SCRIPT" "$flavor")
+[ "$out" = "VERSION=$flavor-$today" ] || { echo "FAIL no-input: got '$out'"; exit 1; }
 
-# 6. No input, today and today.1 exist → today.2
-git tag "$today.1"
-out=$(bash "$SCRIPT")
-[ "$out" = "VERSION=$today.2" ] || { echo "FAIL collision-2: got '$out'"; exit 1; }
+# 5. <flavor>-today tag exists -> <flavor>-today.1
+git tag "$flavor-$today"
+out=$(bash "$SCRIPT" "$flavor")
+[ "$out" = "VERSION=$flavor-$today.1" ] || { echo "FAIL collision-1: got '$out'"; exit 1; }
 
-echo "PASS test-compute-version.sh (6/6)"
+# 6. plus <flavor>-today.1 -> <flavor>-today.2
+git tag "$flavor-$today.1"
+out=$(bash "$SCRIPT" "$flavor")
+[ "$out" = "VERSION=$flavor-$today.2" ] || { echo "FAIL collision-2: got '$out'"; exit 1; }
+
+# 7. A DIFFERENT flavor's tag does not collide.
+git tag "emacs-master-$today"
+out=$(bash "$SCRIPT" "emacs-master")
+[ "$out" = "VERSION=emacs-master-$today.1" ] || { echo "FAIL cross-flavor: got '$out'"; exit 1; }
+
+echo "PASS test-compute-version.sh (8/8)"
