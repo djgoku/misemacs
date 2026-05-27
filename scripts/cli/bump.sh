@@ -53,6 +53,12 @@ require_clean_worktree "$pkg"
 repo=$(read_lockfile_field "$ROOT/$pkg/versions.toml" repo)
 [ -n "$repo" ] || die "$pkg: no repo in versions.toml"
 
+# Branch/tag to track for `latest`. Mac-port flavors live on non-default
+# branches (e.g. emacs-mac-gnu_master_exp), so resolving the repo's default
+# HEAD would grab the wrong line. Default to HEAD when versions.toml omits ref.
+ref=$(read_lockfile_field "$ROOT/$pkg/versions.toml" ref)
+[ -n "$ref" ] || ref="HEAD"
+
 mirror="$ROOT/.cache/mirrors/$(basename "$pkg").git"
 if [ ! -d "$mirror" ]; then
     say "cloning mirror $repo …"
@@ -66,8 +72,8 @@ fi
 # Resolve the sha.
 case "$version" in
     latest)
-        new_sha=$(git ls-remote "$repo" HEAD | awk '{print $1}')
-        [ -n "$new_sha" ] || die "git ls-remote $repo HEAD returned empty"
+        new_sha=$(git ls-remote "$repo" "$ref" | awk '{print $1}')
+        [ -n "$new_sha" ] || die "git ls-remote $repo $ref returned empty"
         ;;
     *)
         # rev-parse handles both full and prefix shas; errors on ambiguity.
