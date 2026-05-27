@@ -14,23 +14,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: jdx/mise-action@v3
-        env:
-          # Point mise at THIS repo's aqua registry on the freshly published commit.
-          MISE_AQUA_REGISTRY_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/aqua/registry.yaml
 
-      - name: Install misemacs via aqua
-        env:
-          MISE_AQUA_REGISTRY_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/aqua/registry.yaml
+      - name: Install + smoke-test the published build
         run: |
-          mise install "aqua:djgoku/misemacs@${{ github.event.release.tag_name }}"
-
-      - name: Smoke-test installed binaries
-        env:
-          MISE_AQUA_REGISTRY_URL: https://raw.githubusercontent.com/${{ github.repository }}/main/aqua/registry.yaml
-        run: |
-          mise exec "aqua:djgoku/misemacs@${{ github.event.release.tag_name }}" -- emacs --version
-          mise exec "aqua:djgoku/misemacs@${{ github.event.release.tag_name }}" -- emacsclient --version
-          mise exec "aqua:djgoku/misemacs@${{ github.event.release.tag_name }}" -- emacs -Q -batch \
+          tag='${{ github.event.release.tag_name }}'
+          mise install "aqua:djgoku/misemacs@${tag}"
+          mise exec "aqua:djgoku/misemacs@${tag}" -- emacs --version
+          mise exec "aqua:djgoku/misemacs@${tag}" -- emacsclient --version
+          mise exec "aqua:djgoku/misemacs@${tag}" -- emacs -Q -batch \
             --eval '(message "verify-published: emacs-version=%s" emacs-version)'
 
       - name: Open triage issue on failure

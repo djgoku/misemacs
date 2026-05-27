@@ -24,43 +24,49 @@ jobs:
 
       - uses: jdx/mise-action@v3
 
-      - name: Bump emacs to latest emacsmirror SHA
+      - name: Bump all flavors to latest
         id: bump
         run: |
-          mise run bump emacs latest
-          if git diff --quiet pkgs/emacs/lockfile.toml; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No new emacs SHA; nothing to release today."
+          changed=()
+          for flavor in emacs-master emacs-mac-master; do
+            mise run bump "$flavor" latest
+            if ! git diff --quiet "pkgs/$flavor/lockfile.toml"; then
+              changed+=("$flavor")
+            fi
+          done
+          if [ ${#changed[@]} -eq 0 ]; then
+            echo "changed=" >> "$GITHUB_OUTPUT"
+            echo "::notice::No flavor moved; nothing to release today."
           else
-            new_sha=$(awk -F'"' '/^sha/{print $2}' pkgs/emacs/lockfile.toml)
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "new_sha=$new_sha" >> "$GITHUB_OUTPUT"
+            echo "changed=${changed[*]}" >> "$GITHUB_OUTPUT"
+            echo "::notice::Changed: ${changed[*]}"
           fi
 
-      - name: Validate new build
-        if: steps.bump.outputs.changed == 'true'
+      - name: Build and validate changed flavors
+        if: steps.bump.outputs.changed != ''
         run: |
-          mise run build
+          for flavor in ${{ steps.bump.outputs.changed }}; do
+            mise run build "$flavor"
+          done
           mise run validate
 
-      - name: Commit and push the bump
-        if: steps.bump.outputs.changed == 'true'
+      - name: Commit the bump(s)
+        if: steps.bump.outputs.changed != ''
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(pkgs/emacs): nightly bump to ${{ steps.bump.outputs.new_sha }}"
-          # Absorb any human commit that landed during the build window. The
-          # cron's commit only touches pkgs/emacs/lockfile.toml; rebase
-          # conflicts only when a human bumped emacs in parallel — fail and
-          # let the issue-opener step run instead of pushing a half-good state.
+          git commit -am "chore(pkgs): nightly bump (${{ steps.bump.outputs.changed }})"
           git pull --rebase origin main
           git push origin main
 
-      - name: Dispatch release.yaml
-        if: steps.bump.outputs.changed == 'true'
+      - name: Dispatch release.yaml per changed flavor
+        if: steps.bump.outputs.changed != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run release.yaml
+        run: |
+          for flavor in ${{ steps.bump.outputs.changed }}; do
+            gh workflow run release.yaml -f flavor="$flavor"
+          done
 
       - name: Open or comment on triage issue (failure dedupe)
         if: failure()

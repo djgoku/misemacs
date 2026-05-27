@@ -5,14 +5,17 @@ on:
       version:
         description: "CalVer (default: today's date with collision suffix)"
         required: false
+      flavor:
+        description: "Single flavor to release (default: all)"
+        required: false
 
 permissions:
-  contents: write       # create release + tag
-  id-token: write       # attest-build-provenance
-  attestations: write   # attest-build-provenance
+  contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
-  group: release-${{ github.event.inputs.version || github.run_id }}
+  group: release-${{ github.event.inputs.flavor || 'all' }}-${{ github.event.inputs.version || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -20,37 +23,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        flavor: ${{ github.event.inputs.flavor && fromJSON(format('["{0}"]', github.event.inputs.flavor)) || fromJSON('["emacs-master","emacs-mac-master"]') }}
         include:
           - { os: macos-14, asset_os: macos, asset_arch: arm64 }
-          # Linux entries land here later (e.g. ubuntu-latest / linux / x86_64).
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # so compute-version.sh can list all tags
+          fetch-depth: 0
 
       - uses: jdx/mise-action@v3
 
       - name: Resolve version
-        run: |
-          bash scripts/cli/compute-version.sh "${{ inputs.version }}" >> "$GITHUB_ENV"
+        run: bash scripts/cli/compute-version.sh "${{ matrix.flavor }}" "${{ inputs.version }}" >> "$GITHUB_ENV"
 
       - name: Refuse to overwrite an existing release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view "$VERSION" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "::error::Release $VERSION already exists. Releases are immutable; supersede with a new CalVer version (e.g. ${VERSION}.1)."
+            echo "::error::Release $VERSION already exists. Releases are immutable; supersede with a new CalVer (e.g. ${VERSION}.1)."
             exit 1
           fi
 
-      - name: Build and validate Emacs.app
+      - name: Build and validate
         run: |
-          mise run build
+          mise run build "${{ matrix.flavor }}"
           mise run validate
 
       - name: Package release artifacts
-        run: bash scripts/cli/release.sh "$VERSION"
+        run: bash scripts/cli/release.sh "${{ matrix.flavor }}" "$VERSION"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -63,7 +65,7 @@ jobs:
             build/release/${{ env.VERSION }}/SHASUMS256.txt
             build/release/${{ env.VERSION }}/build-manifest.org
           fail_on_unmatched_files: true
-          generate_release_notes: true   # appends GitHub's auto-changelog under our body
+          generate_release_notes: true
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v1
