@@ -2,7 +2,7 @@
 # build.sh — self-healing precheck + mise deps install dispatch.
 #
 # Usage: mise run build [target]
-#   target := emacs (default) | enchant | jinx-mod | emacs-libvterm
+#   target := emacs-master (default) | emacs-mac-master | enchant | jinx-mod | emacs-libvterm
 #
 # The precheck is a stripped-down doctor: exits at first failure with a
 # `→ run X` hint. On success, invokes `mise deps install <provider>`
@@ -13,18 +13,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/_lib.sh"
 
 # --- Resolve target ---
-target="${1:-emacs}"
+target="${1:-emacs-master}"
 case "$target" in
-    emacs)            dep_name="pkgs-emacs" ;;
-    emacs-mac)        dep_name="pkgs-emacs-mac" ;;
-    enchant)          dep_name="libs-enchant" ;;
-    jinx-mod)         dep_name="libs-jinx-mod" ;;
-    emacs-libvterm)   dep_name="libs-emacs-libvterm" ;;
-    *)                die "unknown target '$target'; expected one of: emacs, emacs-mac, enchant, jinx-mod, emacs-libvterm" ;;
+    emacs-master)       dep_name="pkgs-emacs-master" ;;
+    emacs-mac-master)   dep_name="pkgs-emacs-mac-master" ;;
+    enchant)            dep_name="libs-enchant" ;;
+    jinx-mod)           dep_name="libs-jinx-mod" ;;
+    emacs-libvterm)     dep_name="libs-emacs-libvterm" ;;
+    *)                  die "unknown target '$target'; expected one of: emacs-master, emacs-mac-master, enchant, jinx-mod, emacs-libvterm" ;;
 esac
 
 # --- Precheck (first-failure exit) ---
-PKGS=(pkgs/emacs pkgs/emacs-mac libs/enchant libs/jinx-mod libs/emacs-libvterm)
+PKGS=(pkgs/emacs-master pkgs/emacs-mac-master libs/enchant libs/jinx-mod libs/emacs-libvterm)
 
 precheck_fail() {
     say "mise run build: precheck failed."
@@ -66,7 +66,7 @@ while IFS= read -r tool; do
 done < <(awk -F'"' '/^"conda:/ { print $2 }' "$ROOT/mise.toml" | sed 's/^conda://')
 
 # --- Build ---
-# pkgs-emacs / pkgs-emacs-mac depend on the libs-* providers, which are
+# pkgs-emacs-master / pkgs-emacs-mac-master depend on the libs-* providers, which are
 # auto=false. `mise deps install <X>` runs X plus its auto=true (conda-*)
 # deps, but does NOT cascade through auto=false depends — so on a clean
 # build/ the libs never build and the emacs compile dies on a missing
@@ -74,7 +74,7 @@ done < <(awk -F'"' '/^"conda:/ { print $2 }' "$ROOT/mise.toml" | sed 's/^conda:/
 # (naming one flavor's pkg avoids building the other); content-addressed
 # freshness skips libs that are already current.
 case "$target" in
-    emacs|emacs-mac)
+    emacs-master|emacs-mac-master)
         for lib in libs-enchant libs-jinx-mod libs-emacs-libvterm; do
             mise deps install "$lib"
         done

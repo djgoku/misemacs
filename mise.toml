@@ -42,7 +42,7 @@ description = "Fresh-clone setup. Idempotent. Runs mise install + hydrate."
 run = "bash scripts/cli/bootstrap.sh"
 
 [tasks.build]
-description = "Hermetic build — runs self-healing precheck then mise deps install. Pass a target alias as the first arg: emacs (default), emacs-mac, enchant, jinx-mod, emacs-libvterm."
+description = "Hermetic build — runs self-healing precheck then mise deps install. Pass a target alias as the first arg: emacs-master (default), emacs-mac-master, enchant, jinx-mod, emacs-libvterm."
 run = 'bash scripts/cli/build.sh'
 
 [tasks.bump]
@@ -54,7 +54,7 @@ description = "Cross-layer invariant check: lockfile/worktree/conda coherence."
 run = "bash scripts/cli/doctor.sh"
 
 [tasks.hydrate]
-description = "Populate .cache/mirrors and tools/*/src worktrees from lockfiles. Pass a package path as the first arg to hydrate just one (e.g., mise run hydrate pkgs/emacs)."
+description = "Populate .cache/mirrors and tools/*/src worktrees from lockfiles. Pass a package path as the first arg to hydrate just one (e.g., mise run hydrate pkgs/emacs-master)."
 run = 'bash scripts/hydrate.sh "${@:-}"'
 
 [tasks.migrate-lockfiles]
@@ -85,7 +85,7 @@ description = "Verify any built Emacs.app bundle(s): self-contained + doctor 8/8
 run = """
 set -e
 found=0
-for variant in emacs emacs-mac; do
+for variant in emacs-master emacs-mac-master; do
   out="build/$variant"
   [ -d "$out/Emacs.app" ] || continue
   found=1
@@ -96,7 +96,7 @@ for variant in emacs emacs-mac; do
       -l moto-emacs-doctor -f moto-emacs-doctor-batch
 done
 if [ $found -eq 0 ]; then
-  echo "no Emacs.app found in build/emacs or build/emacs-mac — run 'mise run build [emacs|emacs-mac]' first" >&2
+  echo "no Emacs.app found in build/emacs-master or build/emacs-mac-master — run 'mise run build [emacs-master|emacs-mac-master]' first" >&2
   exit 1
 fi
 """
@@ -248,13 +248,13 @@ run = "bash scripts/build/conda-prefix.sh zlib"
 
 # === Build graph: from-source pkgs ===
 
-[deps.pkgs-emacs]
+[deps.pkgs-emacs-master]
 auto = false
 sources = [
-  "pkgs/emacs/src/**/*",
-  "pkgs/emacs/build.toml",
-  "pkgs/emacs/src-sha.txt",
-  "pkgs/emacs/src-commit-message.txt",
+  "pkgs/emacs-master/src/**/*",
+  "pkgs/emacs-master/build.toml",
+  "pkgs/emacs-master/src-sha.txt",
+  "pkgs/emacs-master/src-commit-message.txt",
   "build/enchant/lib/libenchant-2.a",
   "build/enchant/lib/enchant-2/enchant_applespell.so",
   "build/jinx-mod/lib/jinx-mod.so",
@@ -275,7 +275,7 @@ sources = [
   "build/conda-autoconf/.path",
   "build/conda-automake/.path",
 ]
-outputs = ["build/emacs/Emacs.app/Contents/MacOS/Emacs"]
+outputs = ["build/emacs-master/Emacs.app/Contents/MacOS/Emacs"]
 depends = [
   "libs-enchant", "libs-jinx-mod", "libs-emacs-libvterm",
   "conda-gnutls", "conda-gmp", "conda-libpng", "conda-libjpeg-turbo",
@@ -284,15 +284,15 @@ depends = [
   "conda-pkg-config", "conda-texinfo", "conda-m4", "conda-libtool",
   "conda-autoconf", "conda-automake",
 ]
-run = "bash scripts/build/emacs-app.sh pkgs/emacs"
+run = "bash scripts/build/emacs-app.sh pkgs/emacs-master"
 
-[deps.pkgs-emacs-mac]
+[deps.pkgs-emacs-mac-master]
 auto = false
 sources = [
-  "pkgs/emacs-mac/src/**/*",
-  "pkgs/emacs-mac/build.toml",
-  "pkgs/emacs-mac/src-sha.txt",
-  "pkgs/emacs-mac/src-commit-message.txt",
+  "pkgs/emacs-mac-master/src/**/*",
+  "pkgs/emacs-mac-master/build.toml",
+  "pkgs/emacs-mac-master/src-sha.txt",
+  "pkgs/emacs-mac-master/src-commit-message.txt",
   "build/enchant/lib/libenchant-2.a",
   "build/enchant/lib/enchant-2/enchant_applespell.so",
   "build/jinx-mod/lib/jinx-mod.so",
@@ -313,7 +313,7 @@ sources = [
   "build/conda-autoconf/.path",
   "build/conda-automake/.path",
 ]
-outputs = ["build/emacs-mac/Emacs.app/Contents/MacOS/Emacs"]
+outputs = ["build/emacs-mac-master/Emacs.app/Contents/MacOS/Emacs"]
 depends = [
   "libs-enchant", "libs-jinx-mod", "libs-emacs-libvterm",
   "conda-gnutls", "conda-gmp", "conda-libpng", "conda-libjpeg-turbo",
@@ -322,7 +322,7 @@ depends = [
   "conda-pkg-config", "conda-texinfo", "conda-m4", "conda-libtool",
   "conda-autoconf", "conda-automake",
 ]
-run = "bash scripts/build/emacs-app.sh pkgs/emacs-mac"
+run = "bash scripts/build/emacs-app.sh pkgs/emacs-mac-master"
 
 [deps.libs-jinx-mod]
 auto = false

@@ -198,7 +198,7 @@ hydrate_git() {
     # next to the worktree. scripts/build/emacs-app.sh reads these and
     # embeds them in Contents/Resources/build-manifest.org. mise's blake3
     # freshness is by content, so identical files don't re-invalidate the
-    # [deps.pkgs-emacs] hash on a no-op rehydrate.
+    # [deps.pkgs-emacs-master] hash on a no-op rehydrate.
     printf '%s\n' "$sha" > "$pkg_dir/src-sha.txt"
     git -C "$mirror" log -1 --format=%B "$sha" > "$pkg_dir/src-commit-message.txt"
 

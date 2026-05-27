@@ -498,7 +498,7 @@ the full provenance.
 
 | target              | lockfile                          |
 |---------------------|-----------------------------------|
-| pkgs/emacs          | pkgs/emacs/lockfile.toml          |
+| pkgs/<flavor>          | pkgs/<flavor>/lockfile.toml       |
 | libs/enchant        | libs/enchant/lockfile.toml        |
 | libs/jinx-mod       | libs/jinx-mod/lockfile.toml       |
 | libs/emacs-libvterm | libs/emacs-libvterm/lockfile.toml |

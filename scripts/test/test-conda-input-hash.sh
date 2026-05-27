@@ -32,10 +32,10 @@ cleanup() { cp "$BACKUP" "$LOCK"; rm -f "$BACKUP"; }
 trap cleanup EXIT
 
 # Build clean.
-mise run build emacs
+mise run build emacs-master
 
 # Capture build-manifest mtime.
-OUT="$ROOT/build/emacs"
+OUT="$ROOT/build/emacs-master"
 MANIFEST="$OUT/Emacs.app/Contents/Resources/build-manifest.org"
 T1=$(/usr/bin/stat -f '%m' "$MANIFEST")
 
@@ -44,9 +44,9 @@ T1=$(/usr/bin/stat -f '%m' "$MANIFEST")
 echo "# test-conda-input-hash sentinel $(date +%s)" >> "$LOCK"
 
 # Build again.
-mise run build emacs
+mise run build emacs-master
 
-OUT="$ROOT/build/emacs"
+OUT="$ROOT/build/emacs-master"
 MANIFEST="$OUT/Emacs.app/Contents/Resources/build-manifest.org"
 T2=$(/usr/bin/stat -f '%m' "$MANIFEST")
 

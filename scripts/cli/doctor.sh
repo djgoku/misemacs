@@ -13,7 +13,7 @@ fail() { printf '[FAIL] %s\n' "$*"; FAILED=1; }
 remedy() { printf '       → %s\n' "$*"; }
 
 FAILED=0
-PKGS=(pkgs/emacs pkgs/emacs-mac libs/enchant libs/jinx-mod libs/emacs-libvterm)
+PKGS=(pkgs/emacs-master pkgs/emacs-mac-master libs/enchant libs/jinx-mod libs/emacs-libvterm)
 
 # --- Per-package coherence ---
 for pkg in "${PKGS[@]}"; do
