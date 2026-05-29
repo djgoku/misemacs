@@ -8,11 +8,17 @@ on:
       flavor:
         description: "Single flavor to release (default: all)"
         required: false
+      verify:
+        description: "After releasing, dispatch verify-published (aqua-install smoke-test). Opt-in: needs verify-published.yaml on the default branch + the aqua registry entry live."
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
   id-token: write
   attestations: write
+  actions: write       # to dispatch verify-published.yaml (optional)
 
 env:
   # Run the JS actions (checkout, mise-action, attest, gh-release) on Node 24;
@@ -135,3 +141,17 @@ jobs:
           "$app/Contents/MacOS/Emacs" -Q -batch \
             -L "$app/Contents/Resources/site-lisp" \
             -l moto-emacs-doctor -f moto-emacs-doctor-batch
+
+      - name: Dispatch verify-published (optional, opt-in)
+        if: steps.changed.outputs.changed == 'true' && inputs.verify
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # workflow_dispatch IS an exception to the GITHUB_TOKEN no-recursion
+          # rule, so this actually triggers verify-published (unlike the
+          # release:published event, which a GITHUB_TOKEN-created release does
+          # not fire). continue-on-error keeps a not-yet-ready verify (e.g.
+          # registry entry not live, or this file not yet on the default branch)
+          # from failing the release.
+          gh workflow run verify-published.yaml --repo "${{ github.repository }}" -f tag="$VERSION"
