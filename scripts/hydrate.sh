@@ -155,6 +155,36 @@ hydrate_git() {
     pkg_name=$(basename "$pkg_dir")
     local mirror="$ROOT/.cache/mirrors/${pkg_name}.git"
 
+    # --- Shallow path (CI), gated by MISEMACS_SHALLOW=1 ---
+    # Fetch only the pinned sha into <pkg>/src (no full bare mirror): ~55 MB
+    # vs ~600 MB for emacsmirror's full mirror, and an actions/cache restore
+    # of that mirror would re-download it in full every run anyway. The local
+    # default uses the full mirror below so `bump <prefix>` can still resolve
+    # arbitrary refs.
+    if [ "${MISEMACS_SHALLOW:-}" = "1" ]; then
+        local sworktree="$ROOT/${pkg_dir#./}/src"
+        if [ -e "$sworktree/.git" ] && \
+           [ "$(git -C "$sworktree" rev-parse HEAD 2>/dev/null || true)" = "$sha" ]; then
+            echo "hydrate: $pkg_dir: shallow worktree already at $sha"
+        else
+            echo "hydrate: $pkg_dir: shallow fetch --depth 1 of $sha"
+            rm -rf "$sworktree"
+            mkdir -p "$sworktree"
+            git -C "$sworktree" init -q
+            git -C "$sworktree" remote add origin "$repo"
+            git -C "$sworktree" fetch --depth 1 -q origin "$sha"
+            git -C "$sworktree" checkout -q FETCH_HEAD
+        fi
+        if [ "$(get "$toml" "submodules")" = "true" ]; then
+            echo "hydrate: $pkg_dir: initializing git submodules (shallow)"
+            git -C "$sworktree" submodule update --init --recursive --depth 1
+        fi
+        printf '%s\n' "$sha" > "$pkg_dir/src-sha.txt"
+        git -C "$sworktree" log -1 --format=%B "$sha" > "$pkg_dir/src-commit-message.txt"
+        echo "hydrate: $pkg_dir: shallow worktree ready at $sha"
+        return 0
+    fi
+
     if [ ! -d "$mirror" ]; then
         echo "hydrate: $pkg_dir: cloning mirror $repo"
         mkdir -p "$(dirname "$mirror")"

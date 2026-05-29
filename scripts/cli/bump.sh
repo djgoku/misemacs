@@ -60,23 +60,25 @@ ref=$(read_lockfile_field "$ROOT/$pkg/versions.toml" ref)
 [ -n "$ref" ] || ref="HEAD"
 
 mirror="$ROOT/.cache/mirrors/$(basename "$pkg").git"
-if [ ! -d "$mirror" ]; then
-    say "cloning mirror $repo …"
-    mkdir -p "$(dirname "$mirror")"
-    git clone --mirror "$repo" "$mirror"
-else
-    say "fetching mirror $(basename "$mirror") …"
-    git -C "$mirror" fetch --tags --prune >/dev/null
-fi
 
 # Resolve the sha.
 case "$version" in
     latest)
+        # ls-remote resolves the ref without a local mirror, so the `latest`
+        # path (nightly/CI) never triggers a full mirror clone.
         new_sha=$(git ls-remote "$repo" "$ref" | awk '{print $1}')
         [ -n "$new_sha" ] || die "git ls-remote $repo $ref returned empty"
         ;;
     *)
-        # rev-parse handles both full and prefix shas; errors on ambiguity.
+        # A prefix/tag/sha needs the local mirror to rev-parse against.
+        if [ ! -d "$mirror" ]; then
+            say "cloning mirror $repo …"
+            mkdir -p "$(dirname "$mirror")"
+            git clone --mirror "$repo" "$mirror"
+        else
+            say "fetching mirror $(basename "$mirror") …"
+            git -C "$mirror" fetch --tags --prune >/dev/null
+        fi
         new_sha=$(git -C "$mirror" rev-parse "$version" 2>/dev/null) || \
             die "could not resolve '$version' in mirror $mirror"
         ;;
@@ -95,8 +97,9 @@ write_lockfile_field "$ROOT/$pkg/lockfile.toml" sha "$new_sha"
 say "hydrating $pkg …"
 (cd "$ROOT" && bash scripts/hydrate.sh "$pkg")
 
-# Pretty summary.
-new_subject=$(git -C "$mirror" log -1 --format=%s "$new_sha" 2>/dev/null || echo "")
+# Pretty summary — read the subject from the freshly-hydrated worktree, which
+# works for both the shallow and full hydrate paths (no mirror dependency).
+new_subject=$(git -C "$ROOT/$pkg/src" log -1 --format=%s 2>/dev/null || echo "")
 say "bumped $pkg to ${new_sha:0:10}… (was ${old_sha:0:10}…)"
 [ -n "$new_subject" ] && say "  subject: $new_subject"
 say "→ run: mise run build"

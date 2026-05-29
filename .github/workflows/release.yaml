@@ -18,6 +18,8 @@ env:
   # Run the JS actions (checkout, mise-action, attest, gh-release) on Node 24;
   # Node 20 is deprecated on GitHub runners (forced to 24 on 2026-06-02, removed 2026-09-16).
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  # CI hydrate shallow-fetches the pinned sha (~55 MB) instead of a full mirror clone (~600 MB).
+  MISEMACS_SHALLOW: "1"
 
 concurrency:
   group: release-${{ github.event.inputs.flavor || 'all' }}-${{ github.event.inputs.version || github.run_id }}
