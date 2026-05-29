@@ -14,6 +14,11 @@ permissions:
   id-token: write
   attestations: write
 
+env:
+  # Run the JS actions (checkout, mise-action, attest, gh-release) on Node 24;
+  # Node 20 is deprecated on GitHub runners (forced to 24 on 2026-06-02, removed 2026-09-16).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: release-${{ github.event.inputs.flavor || 'all' }}-${{ github.event.inputs.version || github.run_id }}
   cancel-in-progress: false
@@ -71,3 +76,22 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: build/release/${{ env.VERSION }}/misemacs-*.tar.gz
+
+      - name: Verify the published release artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Download the asset we just published, verify its checksum, extract,
+          # and run it — confirms the uploaded tarball is intact + runnable.
+          # (The aqua-install path is covered separately by verify-published.yaml.)
+          tmp="$(mktemp -d)"
+          gh release download "$VERSION" --repo "${{ github.repository }}" \
+            --pattern 'misemacs-*.tar.gz' --pattern 'SHASUMS256.txt' --dir "$tmp"
+          ( cd "$tmp" && shasum -a 256 -c SHASUMS256.txt )
+          tar -xzf "$tmp"/misemacs-*.tar.gz -C "$tmp"
+          app="$tmp/misemacs-${VERSION}-macos-arm64/Emacs.app"
+          "$app/Contents/MacOS/Emacs" --version
+          "$app/Contents/MacOS/bin/emacsclient" --version
+          "$app/Contents/MacOS/Emacs" -Q -batch \
+            -L "$app/Contents/Resources/site-lisp" \
+            -l moto-emacs-doctor -f moto-emacs-doctor-batch

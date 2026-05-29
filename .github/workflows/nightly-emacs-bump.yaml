@@ -13,6 +13,10 @@ concurrency:
   group: nightly-emacs-bump
   cancel-in-progress: false
 
+env:
+  # Run the JS actions on Node 24; Node 20 is deprecated on GitHub runners.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   bump-and-maybe-release:
     runs-on: macos-14

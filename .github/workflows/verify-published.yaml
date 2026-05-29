@@ -1,11 +1,24 @@
 name: verify-published
 on:
+  # The `release: published` event does NOT fire when the release is created by
+  # the workflow's GITHUB_TOKEN (GitHub recursion-prevention), so in practice this
+  # runs via workflow_dispatch. It also needs the aqua registry entry (umbrella +
+  # per-flavor sub-packages) to be live for `aqua:djgoku/misemacs@<tag>` to resolve.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to verify (e.g. emacs-mac-master-2026.05.29)"
+        required: true
   release:
     types: [published]
 
 permissions:
   contents: read
   issues: write   # for failure issue
+
+env:
+  # Run the JS actions on Node 24; Node 20 is deprecated on GitHub runners.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   verify-aqua-install:
@@ -15,13 +28,14 @@ jobs:
 
       - uses: jdx/mise-action@v3
 
-      - name: Install + smoke-test the published build
+      - name: Install + smoke-test the published build via aqua
+        env:
+          TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
         run: |
-          tag='${{ github.event.release.tag_name }}'
-          mise install "aqua:djgoku/misemacs@${tag}"
-          mise exec "aqua:djgoku/misemacs@${tag}" -- emacs --version
-          mise exec "aqua:djgoku/misemacs@${tag}" -- emacsclient --version
-          mise exec "aqua:djgoku/misemacs@${tag}" -- emacs -Q -batch \
+          mise install "aqua:djgoku/misemacs@${TAG}"
+          mise exec "aqua:djgoku/misemacs@${TAG}" -- emacs --version
+          mise exec "aqua:djgoku/misemacs@${TAG}" -- emacsclient --version
+          mise exec "aqua:djgoku/misemacs@${TAG}" -- emacs -Q -batch \
             --eval '(message "verify-published: emacs-version=%s" emacs-version)'
 
       - name: Open triage issue on failure
@@ -29,9 +43,11 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const tag = context.payload.release?.tag_name
+              || context.payload.inputs?.tag || "unknown";
             await github.rest.issues.create({
               owner: context.repo.owner, repo: context.repo.repo,
-              title: `verify-published failed for ${context.payload.release.tag_name}`,
-              body: `Release ${context.payload.release.html_url} did not install cleanly via aqua. Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              title: `verify-published failed for ${tag}`,
+              body: `aqua install/smoke-test failed for ${tag}. Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               labels: ["verify-published", "needs-triage"],
             });
