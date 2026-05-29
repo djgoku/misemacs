@@ -41,10 +41,42 @@ jobs:
 
       - uses: jdx/mise-action@v3
 
+      - name: Check whether inputs changed since the last release
+        id: changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Skip the (~11-min) build + a redundant release when this flavor's
+          # build inputs are byte-identical to its most recent release. The
+          # fingerprint (lockfiles + build.toml + mise.lock + build scripts) is
+          # recorded on each release as the inputs.sha256 asset.
+          cur=$(bash scripts/cli/inputs-hash.sh "${{ matrix.flavor }}")
+          echo "current inputs-hash: $cur"
+          prev_tag=$(gh release list --repo "${{ github.repository }}" --json tagName -q '.[].tagName' 2>/dev/null \
+            | grep "^${{ matrix.flavor }}-" | sort | tail -1 || true)
+          prev=""
+          if [ -n "$prev_tag" ]; then
+            d="$(mktemp -d)"
+            gh release download "$prev_tag" --repo "${{ github.repository }}" --pattern inputs.sha256 --dir "$d" 2>/dev/null || true
+            [ -f "$d/inputs.sha256" ] && prev="$(cat "$d/inputs.sha256")"
+            rm -rf "$d"
+            echo "latest ${{ matrix.flavor }} release: $prev_tag (inputs-hash: ${prev:-<none>})"
+          else
+            echo "no prior ${{ matrix.flavor }}-* release"
+          fi
+          if [ -n "$prev" ] && [ "$cur" = "$prev" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.flavor }}: inputs unchanged since $prev_tag — nothing to build or release."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve version
+        if: steps.changed.outputs.changed == 'true'
         run: bash scripts/cli/compute-version.sh "${{ matrix.flavor }}" "${{ inputs.version }}" >> "$GITHUB_ENV"
 
       - name: Refuse to overwrite an existing release
+        if: steps.changed.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -54,14 +86,17 @@ jobs:
           fi
 
       - name: Build and validate
+        if: steps.changed.outputs.changed == 'true'
         run: |
           mise run build "${{ matrix.flavor }}"
           mise run validate
 
       - name: Package release artifacts
+        if: steps.changed.outputs.changed == 'true'
         run: bash scripts/cli/release.sh "${{ matrix.flavor }}" "$VERSION"
 
       - name: Create GitHub release
+        if: steps.changed.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
@@ -71,15 +106,18 @@ jobs:
             build/release/${{ env.VERSION }}/misemacs-*.tar.gz
             build/release/${{ env.VERSION }}/SHASUMS256.txt
             build/release/${{ env.VERSION }}/build-manifest.org
+            build/release/${{ env.VERSION }}/inputs.sha256
           fail_on_unmatched_files: true
           generate_release_notes: true
 
       - name: Attest build provenance
+        if: steps.changed.outputs.changed == 'true'
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: build/release/${{ env.VERSION }}/misemacs-*.tar.gz
 
       - name: Verify the published release artifact
+        if: steps.changed.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

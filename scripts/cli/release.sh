@@ -87,6 +87,12 @@ echo "release.sh: wrote ${OUT_DIR}/SHASUMS256.txt"
 cp "$MANIFEST" "${OUT_DIR}/build-manifest.org"
 echo "release.sh: copied build-manifest.org"
 
+# --- inputs.sha256 — build-input fingerprint. release.yaml records this on
+# each release and compares it next run to skip rebuilding/re-releasing this
+# flavor when nothing changed. ---
+bash scripts/cli/inputs-hash.sh "$FLAVOR" > "${OUT_DIR}/inputs.sha256"
+echo "release.sh: wrote ${OUT_DIR}/inputs.sha256 ($(cat "${OUT_DIR}/inputs.sha256"))"
+
 # --- Auto-generated RELEASE_NOTES.md ---
 # Pulls emacs SHA + upstream commit subject + from-source pkg SHAs from
 # the lockfile.toml files committed in this repo. Conda library versions
