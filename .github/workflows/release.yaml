@@ -13,6 +13,11 @@ on:
         type: boolean
         required: false
         default: false
+      force:
+        description: "Rebuild + re-release even if this flavor's inputs are unchanged."
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -51,31 +56,19 @@ jobs:
         id: changed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          FLAVOR: ${{ matrix.flavor }}
+          VERSION_INPUT: ${{ inputs.version }}
+          FORCE_INPUT: ${{ inputs.force }}
         run: |
           # Skip the (~11-min) build + a redundant release when this flavor's
-          # build inputs are byte-identical to its most recent release. The
-          # fingerprint (lockfiles + build.toml + mise.lock + build scripts) is
-          # recorded on each release as the inputs.sha256 asset.
-          cur=$(bash scripts/cli/inputs-hash.sh "${{ matrix.flavor }}")
-          echo "current inputs-hash: $cur"
-          prev_tag=$(gh release list --repo "${{ github.repository }}" --json tagName -q '.[].tagName' 2>/dev/null \
-            | grep "^${{ matrix.flavor }}-" | sort | tail -1 || true)
-          prev=""
-          if [ -n "$prev_tag" ]; then
-            d="$(mktemp -d)"
-            gh release download "$prev_tag" --repo "${{ github.repository }}" --pattern inputs.sha256 --dir "$d" 2>/dev/null || true
-            [ -f "$d/inputs.sha256" ] && prev="$(cat "$d/inputs.sha256")"
-            rm -rf "$d"
-            echo "latest ${{ matrix.flavor }} release: $prev_tag (inputs-hash: ${prev:-<none>})"
-          else
-            echo "no prior ${{ matrix.flavor }}-* release"
-          fi
-          if [ -n "$prev" ] && [ "$cur" = "$prev" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::${{ matrix.flavor }}: inputs unchanged since $prev_tag — nothing to build or release."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
+          # build inputs are byte-identical to its most recent release.
+          # Version-aware latest-selection, gh --limit, and the --force/--version
+          # escape hatch live in scripts/cli/should_release.exs (unit-tested).
+          args=("$FLAVOR")
+          [ -n "$VERSION_INPUT" ] && args+=(--version "$VERSION_INPUT")
+          [ "$FORCE_INPUT" = "true" ] && args+=(--force)
+          elixir scripts/cli/should_release.exs "${args[@]}" >> "$GITHUB_OUTPUT"
 
       - name: Resolve version
         if: steps.changed.outputs.changed == 'true'
