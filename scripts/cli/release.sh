@@ -90,7 +90,7 @@ echo "release.sh: copied build-manifest.org"
 # --- inputs.sha256 — build-input fingerprint. release.yaml records this on
 # each release and compares it next run to skip rebuilding/re-releasing this
 # flavor when nothing changed. ---
-bash scripts/cli/inputs-hash.sh "$FLAVOR" > "${OUT_DIR}/inputs.sha256"
+elixir scripts/cli/inputs_hash.exs "$FLAVOR" > "${OUT_DIR}/inputs.sha256"
 echo "release.sh: wrote ${OUT_DIR}/inputs.sha256 ($(cat "${OUT_DIR}/inputs.sha256"))"
 
 # --- Auto-generated RELEASE_NOTES.md ---
