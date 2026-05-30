@@ -63,4 +63,50 @@ defmodule Misemacs.Lib do
   end
 
   defp int(s), do: String.to_integer(s)
+
+  # ---- input fingerprint ----
+
+  @doc "Lowercase hex sha256 of a binary."
+  def sha256_hex(bin), do: :crypto.hash(:sha256, bin) |> Base.encode16(case: :lower)
+
+  @doc """
+  Stable sha256 over a flavor's build inputs, computed relative to `root`.
+
+  Scheme (documented for reproducibility): for each input file compute
+  sha256(bytes) as lowercase hex; build lines "<hex>  <relative-path>";
+  sort lines BY PATH; join with "\\n" and a trailing "\\n"; sha256 that blob.
+  Raises if the flavor is unknown or any expected input file is missing.
+  """
+  def inputs_hash(root, flavor) do
+    unless File.exists?(Path.join(root, "pkgs/#{flavor}/lockfile.toml")) do
+      raise "inputs-hash: unknown flavor '#{flavor}'"
+    end
+
+    rel_paths =
+      [
+        "pkgs/#{flavor}/lockfile.toml",
+        "pkgs/#{flavor}/build.toml",
+        "mise.lock"
+      ] ++
+        wildcard_rel(root, "libs/*/lockfile.toml") ++
+        wildcard_rel(root, "libs/*/build.toml") ++
+        wildcard_rel(root, "scripts/build/*.sh")
+
+    lines =
+      rel_paths
+      |> Enum.sort()
+      |> Enum.map(fn rel ->
+        hex = root |> Path.join(rel) |> File.read!() |> sha256_hex()
+        "#{hex}  #{rel}"
+      end)
+
+    sha256_hex(Enum.join(lines, "\n") <> "\n")
+  end
+
+  defp wildcard_rel(root, glob) do
+    root
+    |> Path.join(glob)
+    |> Path.wildcard()
+    |> Enum.map(&Path.relative_to(&1, root))
+  end
 end
