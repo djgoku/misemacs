@@ -20,12 +20,6 @@ defmodule Misemacs.VersionTest do
     refute Lib.valid_calver?("v2026.05.30")
   end
 
-  test "compare_calver orders numerically, not lexically" do
-    assert Lib.compare_calver({2026, 5, 29, 10}, {2026, 5, 29, 9}) == :gt
-    assert Lib.compare_calver({2026, 5, 29, 2}, {2026, 5, 29, 10}) == :lt
-    assert Lib.compare_calver({2026, 5, 29, 0}, {2026, 5, 29, 0}) == :eq
-  end
-
   test "latest_tag picks .10 over .9 and .2 (C1 regression)" do
     tags = [
       "emacs-master-2026.05.29",

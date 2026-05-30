@@ -2,7 +2,7 @@ defmodule Misemacs.Lib do
   @moduledoc """
   Shared pure logic + thin shell wrappers for the misemacs `.exs` CLI scripts.
 
-  Pure functions (parse_calver/compare_calver/latest_tag/next_calver/decide/
+  Pure functions (parse_calver/latest_tag/next_calver/decide/
   parse_ls_remote/inputs_hash) are unit-tested in scripts/test/*_test.exs.
   sh/2 and die/1 do IO/exit and are exercised only by the scripts themselves.
   """
@@ -23,11 +23,6 @@ defmodule Misemacs.Lib do
   def parse_calver(_), do: nil
 
   def valid_calver?(str), do: parse_calver(str) != nil
-
-  @doc "Total order on parsed calver tuples (numeric per field, not lexical)."
-  def compare_calver(a, b) when a < b, do: :lt
-  def compare_calver(a, b) when a > b, do: :gt
-  def compare_calver(_, _), do: :eq
 
   @doc """
   Given a list of full tag names and a flavor, return the highest
@@ -108,5 +103,57 @@ defmodule Misemacs.Lib do
     |> Path.join(glob)
     |> Path.wildcard()
     |> Enum.map(&Path.relative_to(&1, root))
+  end
+
+  # ---- release-skip decision ----
+
+  @doc """
+  Decide whether a flavor needs a build+release. `opts` is
+  %{force: bool, version_given: bool}. Rebuild if forced, if an explicit
+  version was requested, if there is no prior recorded hash, or if the current
+  hash differs from the previous one.
+  """
+  def decide(_cur, _prev, %{force: true}), do: true
+  def decide(_cur, _prev, %{version_given: true}), do: true
+  def decide(_cur, nil, _opts), do: true
+  def decide(_cur, "", _opts), do: true
+  def decide(cur, prev, _opts), do: cur != prev
+
+  # ---- ls-remote ref resolution ----
+
+  @doc """
+  Given `git ls-remote` output (lines of "<sha>\\t<ref>"), return:
+  {:ok, sha} for exactly one distinct sha, {:error, :none} for no matches,
+  {:error, :ambiguous} when matching refs resolve to different shas.
+  """
+  def parse_ls_remote(output) do
+    shas =
+      output
+      |> String.split("\n", trim: true)
+      |> Enum.map(fn line -> line |> String.split(["\t", " "], trim: true) |> List.first() end)
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.uniq()
+
+    case shas do
+      [] -> {:error, :none}
+      [sha] -> {:ok, sha}
+      _ -> {:error, :ambiguous}
+    end
+  end
+
+  # ---- process helpers (used by scripts, not unit-tested) ----
+
+  @doc "Run a command, return trimmed stdout, raise on nonzero exit."
+  def sh(cmd, args) do
+    case System.cmd(cmd, args, stderr_to_stdout: true) do
+      {out, 0} -> String.trim_trailing(out)
+      {out, code} -> raise "#{cmd} #{Enum.join(args, " ")} failed (exit #{code}):\n#{out}"
+    end
+  end
+
+  @doc "Print a message to stderr and halt with exit code 1."
+  def die(msg) do
+    IO.puts(:stderr, msg)
+    System.halt(1)
   end
 end
