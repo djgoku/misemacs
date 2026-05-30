@@ -126,6 +126,13 @@ defmodule Misemacs.Lib do
   Given `git ls-remote` output (lines of "<sha>\\t<ref>"), return:
   {:ok, sha} for exactly one distinct sha, {:error, :none} for no matches,
   {:error, :ambiguous} when matching refs resolve to different shas.
+
+  Scope: callers track branch refs (e.g. "master", "emacs-mac-gnu_master_exp"),
+  which yield a single line. An ANNOTATED tag would emit two lines — the tag
+  object and its peeled commit "<ref>^{}" — with different shas, so this reports
+  {:error, :ambiguous} (a loud failure, not the silent multi-line garbage the
+  old `ls-remote | awk` produced). If a flavor ever tracks an annotated tag,
+  add peeled-commit handling here (prefer the "^{}" commit sha) + a test.
   """
   def parse_ls_remote(output) do
     shas =
