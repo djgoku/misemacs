@@ -80,6 +80,11 @@ bash scripts/test/test-self-heal-precheck.sh
 bash scripts/test/test-compute-version.sh
 bash scripts/test/test-release-preconditions.sh
 bash scripts/test/test-release-packaging.sh
+for t in scripts/test/*_test.exs; do
+  [ -e "$t" ] || continue
+  echo "==> $t"
+  elixir "$t"
+done
 """
 
 [tasks.validate]
