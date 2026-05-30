@@ -34,6 +34,7 @@ defmodule Misemacs.Lib do
 
     parsed =
       tags
+      |> Enum.filter(&is_binary/1)
       |> Enum.filter(&String.starts_with?(&1, prefix))
       |> Enum.map(fn tag -> {tag, parse_calver(String.replace_prefix(tag, prefix, ""))} end)
       |> Enum.reject(fn {_tag, ver} -> ver == nil end)

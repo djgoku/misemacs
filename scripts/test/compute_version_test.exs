@@ -37,6 +37,12 @@ defmodule Misemacs.VersionTest do
     assert Lib.latest_tag([], "emacs-master") == nil
   end
 
+  test "latest_tag tolerates nil/non-binary entries (missing tagName in gh output)" do
+    tags = [nil, "emacs-master-2026.05.30", nil, "emacs-master-2026.05.30.1"]
+    assert Lib.latest_tag(tags, "emacs-master") == "emacs-master-2026.05.30.1"
+    assert Lib.latest_tag([nil], "emacs-master") == nil
+  end
+
   test "next_calver returns today when free, else first free suffix" do
     assert Lib.next_calver("2026.05.30", MapSet.new()) == "2026.05.30"
     assert Lib.next_calver("2026.05.30", MapSet.new(["2026.05.30"])) == "2026.05.30.1"

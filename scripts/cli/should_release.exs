@@ -57,12 +57,17 @@ defmodule ShouldRelease do
   end
 
   defp latest_release_tag(flavor) do
-    json = Lib.sh("gh", ["release", "list"] ++ gh_repo_args() ++ ["--json", "tagName", "--limit", "1000"])
+    case Lib.sh("gh", ["release", "list"] ++ gh_repo_args() ++ ["--json", "tagName", "--limit", "1000"]) do
+      # gh prints "[]" for no releases; guard the empty/whitespace case anyway.
+      "" ->
+        nil
 
-    json
-    |> :json.decode()
-    |> Enum.map(&Map.get(&1, "tagName"))
-    |> Lib.latest_tag(flavor)
+      json ->
+        json
+        |> :json.decode()
+        |> Enum.map(&Map.get(&1, "tagName"))
+        |> Lib.latest_tag(flavor)
+    end
   end
 
   defp download_prev_hash(tag) do
