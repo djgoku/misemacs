@@ -27,10 +27,15 @@ MANIFEST="$APP/Contents/Resources/build-manifest.org"
 [ -f "$MANIFEST" ]             || { echo "release.sh: $MANIFEST not found" >&2; exit 2; }
 
 # Dirty-tree gate: CI never bypasses; local opt-in via env var.
-if [ -n "$(git status --porcelain)" ]; then
+dirty="$(git status --porcelain)"
+if [ -n "$dirty" ]; then
     if [ -n "${GITHUB_ACTIONS:-}" ] || [ -z "${MISEMACS_RELEASE_ALLOW_DIRTY:-}" ]; then
         echo "release.sh: git tree dirty; refusing to release" >&2
         echo "  (set MISEMACS_RELEASE_ALLOW_DIRTY=1 for local dry-runs)" >&2
+        echo "  --- dirty paths (git status --porcelain) ---" >&2
+        printf '%s\n' "$dirty" >&2
+        echo "  --- git diff --stat ---" >&2
+        git --no-pager diff --stat >&2 || true
         exit 2
     fi
 fi
