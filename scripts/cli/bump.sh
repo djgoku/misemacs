@@ -64,10 +64,11 @@ mirror="$ROOT/.cache/mirrors/$(basename "$pkg").git"
 # Resolve the sha.
 case "$version" in
     latest)
-        # ls-remote resolves the ref without a local mirror, so the `latest`
-        # path (nightly/CI) never triggers a full mirror clone.
-        new_sha=$(git ls-remote "$repo" "$ref" | awk '{print $1}')
-        [ -n "$new_sha" ] || die "git ls-remote $repo $ref returned empty"
+        # resolve_ref.exs resolves the ref without a local mirror (so the
+        # `latest` path never triggers a full mirror clone) AND errors on a
+        # missing or ambiguous ref instead of silently taking the first line.
+        new_sha=$(elixir "$SCRIPT_DIR/resolve_ref.exs" "$repo" "$ref") \
+            || die "resolve_ref failed for $repo $ref"
         ;;
     *)
         # A prefix/tag/sha needs the local mirror to rev-parse against.
