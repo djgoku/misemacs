@@ -5,6 +5,8 @@ jobs = 4
 [tools]
 perl = "latest"
 python = "latest"
+erlang = "28"
+elixir = "1.19.5-otp-28"
 
 # Conda libraries — emacs link-time deps. gnutls's env transitively bundles
 # nettle, gmp, libtasn1, libidn2, libffi, p11-kit, gettext — so those are

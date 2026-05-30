@@ -2556,6 +2556,14 @@ conda_deps = [
     "vcomp14-14.44.35208-h818238b_34",
 ]
 
+[[tools.elixir]]
+version = "1.19.5-otp-28"
+backend = "core:elixir"
+
+[[tools.erlang]]
+version = "28.5"
+backend = "core:erlang"
+
 [[tools.perl]]
 version = "5.42.2.0"
 backend = "aqua:skaji/relocatable-perl"
