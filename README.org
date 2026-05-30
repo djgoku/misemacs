@@ -76,12 +76,12 @@ A flavor is =<port>-<line>=. To add one:
 2. *build.toml.* Copy from the nearest existing flavor (Mac lines copy
    =pkgs/emacs-mac-master=; NS lines copy =pkgs/emacs-master=). Older NS lines
    may need =configure_args= tweaks — build, read the error, adjust.
-3. *lockfile.toml.* =schema_version = 2=; then =mise run bump <flavor> latest=
+3. *lockfile.toml.* =mise run bump <flavor> latest=
    (resolves the =ref=) to pin the sha and hydrate.
 4. *Build graph.* Add =[deps.pkgs-<flavor>]= to =mise.toml= (copy a sibling,
    repoint =sources=/=outputs=/=run= to =<flavor>=); add =<flavor>= to the case
    and =PKGS= in =scripts/cli/build.sh=, to =PKG_ALIASES= in =scripts/cli/_lib.sh=,
-   and to the =PKGS= lists in =doctor.sh= / =status.sh= / =migrate-lockfiles.sh=;
+   and to the =PKGS= lists in =doctor.sh= / =status.sh=;
    add it to the =validate= variant loop in =mise.toml=.
 5. *CI.* Add =<flavor>= to the =release.yaml= matrix and the
    =nightly-emacs-bump.yaml= bump loop.
@@ -163,7 +163,7 @@ scripts/build/
 libs/<X>/
 ├── build.toml            — per-target build metadata (linkage, configure_args,
 │                            module_srcs, lib_deps, tool_deps, companion scripts)
-├── lockfile.toml         — schema_version=2; sha pin for the from-git source
+├── lockfile.toml         — sha pin for the from-git source
 ├── versions.toml         — repo URL, source.type=git, optional submodules=true
 ├── pre-autogen.sh        — optional companion (e.g., libs/enchant)
 └── bootstrap.sh          — optional companion (e.g., libs/enchant)

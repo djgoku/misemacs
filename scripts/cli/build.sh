@@ -34,13 +34,7 @@ precheck_fail() {
     exit 1
 }
 
-# 1. Schema version on every lockfile.
-for pkg in "${PKGS[@]}"; do
-    schema=$(read_lockfile_field "$ROOT/$pkg/lockfile.toml" schema_version)
-    [ "$schema" = "2" ] || precheck_fail "$pkg: schema_version=$schema (expected 2)" "mise run migrate-lockfiles"
-done
-
-# 2. Per-pkg coherence: lockfile sha == git src HEAD == src-sha.txt.
+# 1. Per-pkg coherence: lockfile sha == git src HEAD == src-sha.txt.
 #    On drift, auto-hydrate and re-verify.
 for pkg in "${PKGS[@]}"; do
     lockfile_sha=$(read_lockfile_field "$ROOT/$pkg/lockfile.toml" sha)
@@ -58,7 +52,7 @@ for pkg in "${PKGS[@]}"; do
     fi
 done
 
-# 3. Conda layer presence.
+# 2. Conda layer presence.
 while IFS= read -r tool; do
     [ -n "$tool" ] || continue
     mise where "conda:$tool" >/dev/null 2>&1 || \

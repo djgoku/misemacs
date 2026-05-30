@@ -8,7 +8,7 @@
 #
 # <pkg-dir> contents (relative to repo root):
 #   build.toml             Build metadata; see fields below.
-#   lockfile.toml          schema_version = 2 (read for src_sha provenance).
+#   lockfile.toml          sha pin (read for src_sha provenance).
 #   src/                   Hydrated git worktree pinned at the recorded sha.
 #   src-sha.txt            Captured at hydrate time; embedded in the manifest.
 #   src-commit-message.txt Captured at hydrate time; embedded in the manifest.

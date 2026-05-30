@@ -59,10 +59,6 @@ run = "bash scripts/cli/doctor.sh"
 description = "Populate .cache/mirrors and tools/*/src worktrees from lockfiles. Pass a package path as the first arg to hydrate just one (e.g., mise run hydrate pkgs/emacs-master)."
 run = 'bash scripts/hydrate.sh "${@:-}"'
 
-[tasks.migrate-lockfiles]
-description = "One-shot v1 → v2 lockfile migration. Idempotent."
-run = "bash scripts/migrate-lockfiles.sh"
-
 [tasks.status]
 description = "One-glance read of in-sync state across all packages."
 run = "bash scripts/cli/status.sh"

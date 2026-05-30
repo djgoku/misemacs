@@ -5,7 +5,7 @@
 #
 # <pkg-dir> contents (relative to repo root):
 #   build.toml         Build metadata; see fields below.
-#   lockfile.toml      schema_version = 2; sha = "..." (used as VERSION).
+#   lockfile.toml      sha = "..." (used as VERSION).
 #   src/               Hydrated git worktree pinned at the recorded sha.
 #   <pre-autogen.sh>   Optional companion script (named in build.toml).
 #   <bootstrap.sh>     Optional companion script.

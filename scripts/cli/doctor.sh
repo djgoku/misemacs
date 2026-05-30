@@ -21,13 +21,6 @@ for pkg in "${PKGS[@]}"; do
     src="$ROOT/$pkg/src"
     sha_file="$ROOT/$pkg/src-sha.txt"
 
-    schema=$(read_lockfile_field "$lockfile" schema_version)
-    if [ "$schema" != "2" ]; then
-        fail "$pkg  schema_version=$schema (expected 2)"
-        remedy "run: mise run migrate-lockfiles"
-        continue
-    fi
-
     lockfile_sha=$(read_lockfile_field "$lockfile" sha)
     [ -d "$src" ] || { fail "$pkg  $src missing"; remedy "run: mise run hydrate $pkg"; continue; }
     worktree_sha=$(git -C "$src" rev-parse HEAD 2>/dev/null || echo "?")
@@ -63,19 +56,6 @@ if [ "$miss" -eq 0 ]; then
 else
     fail "mise.lock vs installed conda envs ($miss missing)"
     remedy "run: mise install"
-fi
-
-# --- Schema consistency ---
-all_v2=1
-for pkg in "${PKGS[@]}"; do
-    s=$(read_lockfile_field "$ROOT/$pkg/lockfile.toml" schema_version)
-    [ "$s" = "2" ] || all_v2=0
-done
-if [ "$all_v2" = "1" ]; then
-    pass "all lockfiles schema_version=2"
-else
-    fail "some lockfiles still v1"
-    remedy "run: mise run migrate-lockfiles"
 fi
 
 exit "$FAILED"

@@ -8,7 +8,7 @@
 #
 # <pkg-dir> contents (relative to repo root):
 #   build.toml         Build metadata; see fields below.
-#   lockfile.toml      schema_version = 2 (read for src_sha provenance only).
+#   lockfile.toml      sha pin (read for src_sha provenance only).
 #   src/               Hydrated source tree.
 #   <extra-srcs>       Optional: companion .c/.h files outside src/, named
 #                      relative to <pkg-dir> (not src/).

@@ -48,13 +48,6 @@ hydrate_tarball() {
         return 1
     fi
 
-    local schema
-    schema=$(get "$lockfile" "schema_version")
-    if [ "$schema" != "2" ]; then
-        echo "hydrate: $pkg_dir: schema_version=$schema (expected 2). Run scripts/migrate-lockfiles.sh." >&2
-        return 1
-    fi
-
     local current sha256 url
     current=$(get "$lockfile" "version")
     sha256=$(get "$lockfile" "sha256")
@@ -131,17 +124,11 @@ hydrate_git() {
     local toml="$pkg_dir/versions.toml"
     local lockfile="$pkg_dir/lockfile.toml"
 
-    local repo schema sha
+    local repo sha
     repo=$(get "$toml" "repo")
 
     if [ ! -f "$lockfile" ]; then
         echo "hydrate: $pkg_dir: missing lockfile.toml" >&2
-        return 1
-    fi
-
-    schema=$(get "$lockfile" "schema_version")
-    if [ "$schema" != "2" ]; then
-        echo "hydrate: $pkg_dir: schema_version=$schema (expected 2). Run scripts/migrate-lockfiles.sh." >&2
         return 1
     fi
 
