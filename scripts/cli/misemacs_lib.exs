@@ -86,6 +86,7 @@ defmodule Misemacs.Lib do
       ] ++
         wildcard_rel(root, "libs/*/lockfile.toml") ++
         wildcard_rel(root, "libs/*/build.toml") ++
+        wildcard_rel(root, "libs/*/*.sh") ++
         wildcard_rel(root, "scripts/build/*.sh")
 
     lines =

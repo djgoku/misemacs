@@ -16,6 +16,7 @@ defmodule Misemacs.InputsHashTest do
     write!(root, "pkgs/emacs-master/build.toml", "configure = \"--with-x\"\n")
     write!(root, "libs/enchant/lockfile.toml", "sha = \"def\"\n")
     write!(root, "libs/enchant/build.toml", "rule = \"autotools\"\n")
+    write!(root, "libs/enchant/pre-autogen.sh", "patch source\n")
     write!(root, "mise.lock", "[tools]\n")
     write!(root, "scripts/build/foo.sh", "echo hi\n")
     root
@@ -35,6 +36,14 @@ defmodule Misemacs.InputsHashTest do
     fixture!(root)
     h1 = Lib.inputs_hash(root, "emacs-master")
     File.write!(Path.join(root, "mise.lock"), "[tools]\nbumped\n")
+    refute h1 == Lib.inputs_hash(root, "emacs-master")
+  end
+
+  @tag :tmp_dir
+  test "a lib build script (libs/*/*.sh) is part of the fingerprint", %{tmp_dir: root} do
+    fixture!(root)
+    h1 = Lib.inputs_hash(root, "emacs-master")
+    File.write!(Path.join(root, "libs/enchant/pre-autogen.sh"), "patch source differently\n")
     refute h1 == Lib.inputs_hash(root, "emacs-master")
   end
 
