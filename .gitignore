@@ -12,3 +12,4 @@ libs/**/*.tar.*
 /build/
 /dist/
 /logs/
+/tmp/
