@@ -9,6 +9,16 @@
 # and writes a sentinel for `mise run status`'s "last built" column.
 set -euo pipefail
 
+# A build must not rewrite the committed lockfile. The conda:* tools are pinned
+# "latest", so with mise's lockfile maintenance on (its default), the
+# `mise deps install` calls below re-resolve them and rewrite mise.lock — which
+# dirties the tree and makes release.sh's dirty-tree gate refuse to publish (the
+# CI failure). The toolchain is installed from the committed lock by a prior bare
+# `mise install` (mise-action on CI, `mise run bootstrap` locally); a build only
+# consumes the lock. Refresh it deliberately via `mise run bump`, never as a
+# build side effect.
+export MISE_LOCKFILE=false
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/_lib.sh"
 
