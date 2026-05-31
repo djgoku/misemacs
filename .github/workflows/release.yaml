@@ -31,6 +31,13 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   # CI hydrate shallow-fetches the pinned sha (~55 MB) instead of a full mirror clone (~600 MB).
   MISEMACS_SHALLOW: "1"
+  # A release must never rewrite the committed lockfile. The conda:* tools are
+  # pinned "latest"; on a cold runner mise would otherwise re-resolve them and
+  # add the platform's entries to mise.lock, dirtying the tree so release.sh
+  # refuses to publish. This covers every mise call in the job (mise-action's
+  # install AND build.sh's `mise deps install`). Refresh the lock deliberately
+  # via the nightly bump, never as a release side effect.
+  MISE_LOCKFILE: "false"
 
 concurrency:
   group: release-${{ github.event.inputs.flavor || 'all' }}-${{ github.event.inputs.version || github.run_id }}
