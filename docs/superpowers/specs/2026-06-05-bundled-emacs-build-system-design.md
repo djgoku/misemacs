@@ -446,6 +446,17 @@ Cheap/risky things proven before macOS minutes are spent.
 - **Developer ID + notarization:** add behind CI secrets if Phase 3 shows ad-hoc is
   insufficient; pipeline still builds without secrets for contributors.
 - **Per-channel `latest` aliases** once >1 channel exists.
+- **Terminal Emacs (`emacs -nw`)** — v1 ships **GUI-only** (`Emacs.app`); the NS GUI never
+  initializes terminfo, so `-nw` is deliberately **not gated** in Phase 2 and ncurses is just
+  bundled generically (the dylib only needs to *resolve* at load). Adding working `-nw` later is a
+  **one-row change to `bundle-relocate`**: rewrite the bundled `@rpath/libncurses.6.dylib` install
+  name to the system `/usr/lib/libncurses.5.4.dylib`, so TTY frames read the system terminfo DB
+  (`/usr/share/terminfo`) natively — the path every macOS Emacs uses. (A *bundled* conda ncurses
+  can't, without extra machinery: its compiled-in terminfo search is **only**
+  `$CONDA_PREFIX/share/terminfo`, gone on user machines — validated 2026-06-09 via `infocmp -D`;
+  the alternative is shipping a terminfo DB + a `TERMINFO_DIRS` launcher.) **When:** a fast-follow
+  once the v1 GUI pipeline installs & runs end-to-end (**post-Phase 4**), validated by adding a
+  `-nw` smoke to the clean-VM test. Low-risk and additive — no redesign.
 - **conda libxml2 `.pc`/headers — revisit the Phase-1 `libxml2 <2.14` pin (TODO).** Phase 1
   pins `libxml2 <2.14` (resolves 2.13.x) because conda-forge libxml2 **2.14+ ships
   runtime-only** (`libxml2.16.dylib` with no `libxml-2.0.pc` or headers), which would force
