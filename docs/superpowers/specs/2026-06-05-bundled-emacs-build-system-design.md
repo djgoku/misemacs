@@ -7,7 +7,7 @@
 
 ## 1. Goal
 
-Build self-contained, **relocatable Emacs** from `emacs-mirror/emacs` for multiple
+Build self-contained, **relocatable Emacs** from `emacsmirror/emacs` for multiple
 versions/refs, publish them as GitHub Releases on a **daily cadence that only
 releases when something actually changed**, and make each build installable via
 mise/aqua. Adding a new Emacs version must be a **data change, never a code change**.
@@ -103,7 +103,7 @@ Adding a version = add one `versions.toml` row + a `versions/<ref>/` dir
 
 ```toml
 [versions.master]
-ref = "master"        # git ref in emacs-mirror/emacs
+ref = "master"        # git ref in emacsmirror/emacs
 channel = "master"    # used in tag: emacs-master-YYYY-MM-DD
 
 # [versions."emacs-30.2"]   # FUTURE: copy a dir + add a row
@@ -134,7 +134,7 @@ with the right shape from **conda-forge (pixi)**. CLI-shaped registry hits
 
 ```toml
 [tools]
-pixi   = "latest"   # mise registry; backs the pixi plugins below
+pixi   = "0.70.2"   # EXACT pin (Phase 1): deterministic toolchain_hash; no cold-cache lock churn
 erlang = "29"
 elixir = "1.20.0-otp-29"     # the orchestrator brain
 # gh is preinstalled on GitHub runners
@@ -165,10 +165,14 @@ reproduces CI with no version drift. This same `mise.toml`/`mise.lock` is what
 | make | build | host Xcode CLT | no |
 | gnutls (+ nettle, p11-kit, libtasn1, gmp) | TLS for `url`/package.el | pixi/conda | **yes** |
 | libxml2 | XML parsing | pixi/conda | **yes** |
-| jansson | fast JSON | pixi/conda | **yes** |
 | tree-sitter **library** | `treesit` (`--with-tree-sitter`) | pixi/conda (libtree-sitter + headers) | **yes** — *v1-optional*: drop if conda-forge doesn't ship the lib+headers cleanly on osx-arm64 (Phase 1); re-add later |
 | ncurses | `emacs -nw` (terminal) | **system** `/usr/lib` (macOS ships it) | **no** — system ref, allowed by gate; verify `-nw` in Phase 1 |
 | **libgccjit** | native-comp | — | **EXCLUDED** in v1 |
+
+> Phase 1 update: `jansson`/`--with-json` removed — Emacs `master` uses a native JSON parser
+> (libjansson dropped upstream in Emacs 30). `libxml2` is pinned `<2.14` in `pixi.toml`
+> (conda 2.14+ ships runtime-only; 2.13.x bundles `libxml-2.0.pc` + headers). `tree-sitter`
+> KEPT (`libtree-sitter` + `tree-sitter.pc` clean on osx-arm64). ncurses stays **system**.
 
 ### 6.3 The critical boundary: build deps ≠ shipped runtime libs
 
@@ -204,10 +208,8 @@ path is the reproducible default for the bundled set.
 ```toml
 [env]
 EMACS_REF = "master"
-EMACS_CONFIGURE_FLAGS = "--with-ns --without-native-compilation --with-json --with-xml2 --with-gnutls --with-tree-sitter"
+EMACS_CONFIGURE_FLAGS = "--with-ns --without-native-compilation --with-tree-sitter --with-xml2 --with-gnutls"
 _.pixi-env = { tools = true, manifest_path = "./pixi.toml" }   # activate the locked build env (mise-env-pixi)
-# Note: --with-tree-sitter is v1-OPTIONAL — drop it if conda-forge libtree-sitter
-# isn't clean on osx-arm64 (Phase 1); re-add post-v1. See §6.2.
 ```
 
 ## 7. Orchestration brain (Elixir) & state
@@ -265,7 +267,7 @@ toolchain_hash = sha256( bytes(mise.toml) ⧺ bytes(mise.lock) )   # repo-level 
 
 fingerprint(ref) = sha256(
     toolchain_hash                            # pixi/elixir/etc. pin — change ⇒ rebuild ALL refs
-  ⧺ upstream_sha                              # git ls-remote emacs-mirror/emacs <ref>
+  ⧺ upstream_sha                              # git ls-remote emacsmirror/emacs <ref> (no-dash mirror; resolves identically to emacs-mirror/emacs — Phase 1)
   ⧺ bytes(versions/<ref>/mise.toml)
   ⧺ bytes(versions/<ref>/pixi.toml)
   ⧺ bytes(versions/<ref>/pixi.lock) )
@@ -400,8 +402,10 @@ semantics; local toolchain present (mise 2026.6.0, aqua 2.59, gh 2.92, elixir/OT
 **Open** (resolve during implementation):
 - Ad-hoc on a *second* arm64 Mac via the aqua path — **assumed OK** (existing
   `djgoku/misemacs` releases install elsewhere); optional confirm in Phase 3.
-- conda-forge `tree-sitter` provides `libtree-sitter`+headers — if not, drop
-  `--with-tree-sitter` for v1 (Phase 1).
+- conda-forge `tree-sitter` provides `libtree-sitter`+headers — **RESOLVED: KEEP**
+  (`libtree-sitter` + headers + `tree-sitter.pc` confirmed clean on osx-arm64, Phase 1).
+- jansson / `--with-json` — **RESOLVED: removed upstream on `master`** (native JSON parser
+  since Emacs 30; dep + flag dropped).
 - `mise-backend-pixi`: does `pixi:<tool>` transitively lock via `mise.lock`, and is the
   prefix `pixi:` (install name) vs `vfox-pixi:`? (Phase 0.)
 - Exact `gh release create` exit code on a pre-existing tag (confirm before Phase 4).
@@ -442,4 +446,12 @@ Cheap/risky things proven before macOS minutes are spent.
 - **Developer ID + notarization:** add behind CI secrets if Phase 3 shows ad-hoc is
   insufficient; pipeline still builds without secrets for contributors.
 - **Per-channel `latest` aliases** once >1 channel exists.
+- **conda libxml2 `.pc`/headers — revisit the Phase-1 `libxml2 <2.14` pin (TODO).** Phase 1
+  pins `libxml2 <2.14` (resolves 2.13.x) because conda-forge libxml2 **2.14+ ships
+  runtime-only** (`libxml2.16.dylib` with no `libxml-2.0.pc` or headers), which would force
+  Emacs's pkg-config check onto the *system* libxml2 instead of the pixi one. Investigate how
+  to use a **newer** conda libxml2 and still obtain its dev files (a separate dev output/
+  package, a feedstock build variant, or building the feedstock locally) so the pin can be
+  lifted. Ref: libxml2-feedstock `build-locally.py` —
+  https://github.com/conda-forge/libxml2-feedstock/blob/main/build-locally.py
 ```
