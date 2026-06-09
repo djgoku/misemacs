@@ -23,3 +23,7 @@ run = "mix format --check-formatted"
 [tasks.fmt]
 dir = "orchestrator"
 run = "mix format"
+
+[tasks.configure-check]
+description = "Phase 1: fetch Emacs + ./configure against the per-version pixi env; assert feature detection (configure-only)"
+run = "bash scripts/configure-check.sh master"
