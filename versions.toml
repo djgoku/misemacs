@@ -1,5 +1,5 @@
 # THE manifest. Adding a version = one entry here + a versions/<name>/ dir.
 # Table key == git ref (the join key / versions/<name>/ dir); channel is the short form.
 [versions.master]
-ref = "master"        # git ref in emacs-mirror/emacs
+ref = "master"        # git ref in emacsmirror/emacs
 channel = "master"    # used in the tag: emacs-master-YYYY-MM-DD
