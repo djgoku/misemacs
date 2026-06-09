@@ -1,6 +1,13 @@
 [tools]
 erlang = "29"
 elixir = "1.20.0-otp-29"
+pixi   = "0.70.2"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
+
+[plugins]
+# Canonical local-first pixi path (identical in CI). NOT load-bearing: direct `pixi`/`pixi run`
+# is the documented fallback (same pixi.lock). See spec §6.1/§6.4.
+pixi-env  = "https://github.com/esteve/mise-env-pixi"      # activates a per-version pixi PROJECT (the `_.pixi-env` env directive)
+vfox-pixi = "https://github.com/esteve/mise-backend-pixi"  # backend: `mise use vfox-pixi:<tool>` for ad-hoc conda tools (MUST be vfox-pixi, NOT pixi)
 
 # Shared task seam: local dev, pregate (.pregate/linux.sh), and GitHub CI all invoke
 # `mise run test` / `mise run lint` — one definition, three environments. `dir` is relative

@@ -4,6 +4,94 @@
 version = "1.20.0-otp-29"
 backend = "core:elixir"
 
+[tools.elixir."platforms.linux-arm64"]
+checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468f19"
+url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
+
+[tools.elixir."platforms.linux-arm64-musl"]
+checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468f19"
+url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
+
+[tools.elixir."platforms.linux-x64"]
+checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468f19"
+url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
+
+[tools.elixir."platforms.linux-x64-musl"]
+checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468f19"
+url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
+
+[tools.elixir."platforms.macos-arm64"]
+checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468f19"
+url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
+
+[tools.elixir."platforms.macos-x64"]
+checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468f19"
+url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
+
+[tools.elixir."platforms.windows-x64"]
+checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468f19"
+url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
+
 [[tools.erlang]]
 version = "29.0.1"
 backend = "core:erlang"
+
+[[tools.pixi]]
+version = "0.70.2"
+backend = "github:prefix-dev/pixi"
+
+[tools.pixi."platforms.linux-arm64"]
+checksum = "sha256:19f61d069f7ab963f3b9d6794134f893c83ecd2b7cd698e19268daa3a1fa606b"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/pixi-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/441802069"
+
+[tools.pixi."platforms.linux-arm64".provenance.slsa]
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/attestations-aarch64-unknown-linux-musl.intoto.jsonl"
+
+[tools.pixi."platforms.linux-arm64-musl"]
+checksum = "sha256:19f61d069f7ab963f3b9d6794134f893c83ecd2b7cd698e19268daa3a1fa606b"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/pixi-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/441802069"
+
+[tools.pixi."platforms.linux-arm64-musl".provenance.slsa]
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/attestations-aarch64-unknown-linux-musl.intoto.jsonl"
+
+[tools.pixi."platforms.linux-x64"]
+checksum = "sha256:9d0d72fc1fa1a8f87bfde943cf25d3575cb352cb516795d4dab21898bd98adea"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/pixi-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/441802136"
+
+[tools.pixi."platforms.linux-x64".provenance.slsa]
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/attestations-x86_64-unknown-linux-musl.intoto.jsonl"
+
+[tools.pixi."platforms.linux-x64-musl"]
+checksum = "sha256:9d0d72fc1fa1a8f87bfde943cf25d3575cb352cb516795d4dab21898bd98adea"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/pixi-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/441802136"
+
+[tools.pixi."platforms.linux-x64-musl".provenance.slsa]
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/attestations-x86_64-unknown-linux-musl.intoto.jsonl"
+
+[tools.pixi."platforms.macos-arm64"]
+checksum = "sha256:861d03fc9df28c76ef174ece007d02537ae1c24e467d65de0fc82c78af71cced"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/pixi-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/441802024"
+
+[tools.pixi."platforms.macos-arm64".provenance.slsa]
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/attestations-aarch64-apple-darwin.intoto.jsonl"
+
+[tools.pixi."platforms.macos-x64"]
+checksum = "sha256:5d5b1bb53b8ea17524e6de03f43fe2c770baa9360f098d244fb26e1f44785b3a"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/pixi-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/441802097"
+
+[tools.pixi."platforms.macos-x64".provenance.slsa]
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/attestations-x86_64-apple-darwin.intoto.jsonl"
+
+[tools.pixi."platforms.windows-x64"]
+checksum = "sha256:90bab8eb79031ae406119dc33ca24bc680a17b05364b96174c5d74a26563509c"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/pixi-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/441802123"
+
+[tools.pixi."platforms.windows-x64".provenance.slsa]
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.70.2/attestations-x86_64-pc-windows-msvc.intoto.jsonl"
