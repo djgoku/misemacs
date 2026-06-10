@@ -58,6 +58,9 @@ defmodule Orchestrator.Relocate do
     end
   end
 
+  # Single-libdir assumption: every `@rpath/*` dep is resolved under `build_libdir`
+  # (`$CONDA_PREFIX/lib`). Anything not found there warns (`do_copy`) and is caught by
+  # the gate as `:missing_lib` rather than silently dropped.
   defp resolve("@rpath/" <> base, lib), do: Path.join(lib, base)
   defp resolve("/" <> _ = abs, _lib), do: abs
   defp resolve(_, _), do: nil

@@ -47,6 +47,7 @@ defmodule Orchestrator.Macho.Otool do
     :ok
   end
 
+  # tolerate nonzero: re-runs hit benign "would duplicate rpath" / "no such rpath" — required for idempotency
   defp int_ok(path, args) do
     System.cmd("install_name_tool", args ++ [path], stderr_to_stdout: true)
     :ok
