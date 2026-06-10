@@ -2,8 +2,10 @@ defmodule Orchestrator.Relocate do
   @moduledoc """
   Make an `Emacs.app` self-contained: copy the non-system dylib closure into
   `Contents/Frameworks`, normalize ids/refs to `@rpath`, give each Mach-O a depth-correct
-  `@loader_path` rpath, delete the build-time conda (foreign) rpath, ad-hoc re-sign
-  (Decision C), then gate. Generic over all Mach-O (no ncurses/terminfo special-case —
+  `@loader_path` rpath, delete the build-time conda (foreign) rpath, then once all
+  Mach-O edits are done deep ad-hoc sign the whole bundle (Decision C — single
+  `codesign --force --deep --sign -`; Phase 3 owns proper signing), then gate. Generic
+  over all Mach-O (no ncurses/terminfo special-case —
   GUI-only, spec §15). Reasoning is pure (`Orchestrator.Macho`); IO via a `Macho.Tool`
   (default `Orchestrator.Macho.Otool`), injectable for tests.
   """
@@ -17,6 +19,7 @@ defmodule Orchestrator.Relocate do
 
     copy_closure(machos(app, tool), fw, build_libdir, tool)
     Enum.each(machos(app, tool), &rewrite(&1, fw, tool))
+    tool.sign_bundle(app)
     gate(app, fw, tool)
   end
 
@@ -73,7 +76,6 @@ defmodule Orchestrator.Relocate do
 
     tool.add_rpath(f, "@loader_path/" <> Macho.relpath(fw, Path.dirname(f)))
     for rp <- tool.rpaths(f), Macho.classify(rp) == :foreign, do: tool.delete_rpath(f, rp)
-    tool.resign(f)
   end
 
   defp gate(app, fw, tool) do

@@ -31,9 +31,10 @@ defmodule Orchestrator.Macho.Otool do
   def delete_rpath(path, rp), do: int_ok(path, ["-delete_rpath", rp])
 
   @impl true
-  def resign(path) do
-    System.cmd("codesign", ["--remove-signature", path], stderr_to_stdout: true)
-    {_, 0} = System.cmd("codesign", ["-s", "-", "-f", path], stderr_to_stdout: true)
+  def sign_bundle(app) do
+    {_, 0} =
+      System.cmd("codesign", ["--force", "--deep", "--sign", "-", app], stderr_to_stdout: true)
+
     :ok
   end
 

@@ -4,8 +4,31 @@ defmodule Orchestrator.RelocateTest do
 
   setup do
     t = Path.join(System.tmp_dir!(), "reloc-#{System.unique_integer([:positive])}")
+    app = Path.join(t, "App.app")
     File.mkdir_p!(Path.join([t, "buildlib"]))
-    File.mkdir_p!(Path.join([t, "App.app", "Contents", "MacOS", "bin"]))
+    File.mkdir_p!(Path.join([app, "Contents", "MacOS", "bin"]))
+
+    # A valid bundle requires Info.plist so codesign --deep doesn't complain about bundle format
+    File.write!(Path.join([app, "Contents", "Info.plist"]), """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>CFBundleExecutable</key><string>App</string>
+      <key>CFBundleIdentifier</key><string>com.test.relocate</string>
+      <key>CFBundleName</key><string>App</string>
+      <key>CFBundlePackageType</key><string>APPL</string>
+    </dict>
+    </plist>
+    """)
+
+    # A nested non-Mach-O helper reproduces the original failure: per-file signing of the
+    # main executable would trigger bundle mode and fail on this unsigned non-Mach-O helper
+    File.mkdir_p!(Path.join([app, "Contents", "MacOS", "libexec"]))
+    script = Path.join([app, "Contents", "MacOS", "libexec", "helper.sh"])
+    File.write!(script, "#!/bin/sh\necho hi\n")
+    File.chmod!(script, 0o755)
+
     on_exit(fn -> File.rm_rf!(t) end)
     {:ok, t: t}
   end
@@ -59,6 +82,7 @@ defmodule Orchestrator.RelocateTest do
     end
 
     assert Orchestrator.Relocate.run(app, lib) == :ok
+    assert {_, 0} = System.cmd("codesign", ["--verify", "--deep", app], stderr_to_stdout: true)
     assert File.exists?(Path.join([app, "Contents", "Frameworks", "libfoo.dylib"]))
     assert File.exists?(Path.join([app, "Contents", "Frameworks", "libbar.dylib"]))
 
@@ -101,6 +125,7 @@ defmodule Orchestrator.RelocateTest do
     assert Orchestrator.Macho.classify(abs) == :foreign
 
     assert Orchestrator.Relocate.run(app, lib) == :ok
+    assert {_, 0} = System.cmd("codesign", ["--verify", "--deep", app], stderr_to_stdout: true)
     assert File.exists?(Path.join([app, "Contents", "Frameworks", "libabs.dylib"]))
     deps = Orchestrator.Macho.Otool.deps(app_bin)
     # the absolute ref was rewritten

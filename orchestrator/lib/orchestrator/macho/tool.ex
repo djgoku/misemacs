@@ -8,5 +8,5 @@ defmodule Orchestrator.Macho.Tool do
   @callback change(Path.t(), String.t(), String.t()) :: :ok
   @callback add_rpath(Path.t(), String.t()) :: :ok
   @callback delete_rpath(Path.t(), String.t()) :: :ok
-  @callback resign(Path.t()) :: :ok
+  @callback sign_bundle(Path.t()) :: :ok
 end
