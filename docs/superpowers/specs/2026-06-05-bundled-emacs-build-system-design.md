@@ -166,13 +166,14 @@ reproduces CI with no version drift. This same `mise.toml`/`mise.lock` is what
 | gnutls (+ nettle, p11-kit, libtasn1, gmp) | TLS for `url`/package.el | pixi/conda | **yes** |
 | libxml2 | XML parsing | pixi/conda | **yes** |
 | tree-sitter **library** | `treesit` (`--with-tree-sitter`) | pixi/conda (libtree-sitter + headers) | **yes** — *v1-optional*: drop if conda-forge doesn't ship the lib+headers cleanly on osx-arm64 (Phase 1); re-add later |
-| ncurses | `emacs -nw` (terminal) | **system** `/usr/lib` (macOS ships it) | **no** — system ref, allowed by gate; verify `-nw` in Phase 1 |
+| ncurses | terminal (`-nw`) — *not exercised by the GUI* | pixi/conda (texinfo pulls it) | **yes** — bundled generically (GUI-only v1: the dylib only needs to *resolve*; `-nw`/terminfo deferred, §15) |
 | **libgccjit** | native-comp | — | **EXCLUDED** in v1 |
 
 > Phase 1 update: `jansson`/`--with-json` removed — Emacs `master` uses a native JSON parser
 > (libjansson dropped upstream in Emacs 30). `libxml2` is pinned `<2.14` in `pixi.toml`
 > (conda 2.14+ ships runtime-only; 2.13.x bundles `libxml-2.0.pc` + headers). `tree-sitter`
-> KEPT (`libtree-sitter` + `tree-sitter.pc` clean on osx-arm64). ncurses stays **system**.
+> KEPT (`libtree-sitter` + `tree-sitter.pc` clean on osx-arm64). **ncurses (Phase 2): links from pixi
+> (texinfo pulls it) and is bundled generically — GUI-only, so terminfo/`-nw` is deferred (§15).**
 
 ### 6.3 The critical boundary: build deps ≠ shipped runtime libs
 
@@ -280,25 +281,29 @@ stored separately so the change `reason` distinguishes an upstream commit from a
 dependency bump. First run (no manifest) ⇒ everything builds. Empty `ls-remote` ⇒
 skip with a warning (never treated as "changed").
 
-> **Un-fingerprinted input to resolve in Phase 1/2:** host `make`/Xcode Command Line
-> Tools are NOT in the fingerprint, so a runner-image CLT/SDK bump silently changes
-> output without triggering a rebuild — the one crack in the otherwise-hermetic D7
-> story. Phase 1/2 decides: source `make` (and any other host tool) from pixi, or fold
-> the CLT/SDK version into `toolchain_hash`.
+> **Host make/CLT fingerprint gap — RESOLVED Phase 2 (Decision E), wired Phase 5:** host `make`/Xcode
+> Command Line Tools are NOT in the fingerprint, so a runner-image CLT/SDK bump silently changes output
+> without triggering a rebuild. Resolution: fold `xcode-select -p` + `clang --version` (the CLT/SDK build
+> string) into `toolchain_hash`, implemented when the fingerprint is consumed (Phase 5).
 
 ## 9. Build, relocation & signing
 
-1. **build-emacs:** activate the locked pixi env (`mise-env-pixi`; or `pixi run`
-   fallback); `./autogen.sh` (if git checkout); `./configure
-   $EMACS_CONFIGURE_FLAGS LDFLAGS=-Wl,-headerpad_max_install_names`; `make && make
-   install` → `Emacs.app` (still linked to pixi dylibs).
-2. **bundle-relocate (the crux):** generic over *all* Mach-O in the bundle — copy
-   non-system dylibs into `Emacs.app/Contents/Frameworks/`, set ids to `@rpath/<lib>`,
-   rewrite inter-lib refs, add `LC_RPATH @executable_path/../Frameworks`.
-   **Gate:** `otool -L` over every Mach-O must show **zero** pixi/conda/Homebrew paths;
-   CI fails otherwise. Smoke-launch on a runner that never had pixi.
-3. **sign:** ad-hoc (`codesign -s -`) **strictly last** (relocation invalidates
-   signatures). Developer ID + notarization deferred (§13).
+1. **build-emacs (bash):** under the locked pixi env (`pixi run`); `./autogen.sh`;
+   `./configure $EMACS_CONFIGURE_FLAGS LDFLAGS="-Wl,-headerpad_max_install_names
+   -Wl,-rpath,$CONDA_PREFIX/lib"`; `make && make install` → `nextstep/Emacs.app` (still linked to
+   pixi `@rpath` dylibs). The `-rpath,$CONDA_PREFIX/lib` is required so the in-build dump step
+   (`temacs --temacs=pbootstrap`) can load the conda dylibs (Phase-1 finding); relocation deletes it.
+2. **relocate (the crux — Elixir `Orchestrator.Relocate`, per D4/§7.1; not bash):** generic over *all*
+   Mach-O — BFS the non-system dylib closure into `Emacs.app/Contents/Frameworks/`, set ids to
+   `@rpath/<lib>`, rewrite foreign-absolute refs to `@rpath`, add a depth-correct
+   `LC_RPATH @loader_path/<rel-to-Frameworks>` to each Mach-O, delete the build-time `$CONDA_PREFIX/lib`
+   rpath. **Gate** (`Macho.gate_violations`): **zero** foreign dep paths, **zero** foreign rpaths, every
+   `@rpath/<lib>` present in Frameworks — else fail. Clean-room launch = pregate VM with the pixi env
+   moved aside (§11.3).
+3. **sign (Decision C):** a single **deep** ad-hoc sign of the whole bundle, **last**
+   (`codesign --force --deep --sign -`) — per-file signing of the bundle main executable triggers
+   bundle-mode codesign that fails on nested helpers (`libexec/rcs2log`). Developer ID + notarization
+   deferred (§13/Phase 3).
 
 ## 10. Packaging & the aqua contract (verified from the registry branch)
 
@@ -409,10 +414,11 @@ semantics; local toolchain present (mise 2026.6.0, aqua 2.59, gh 2.92, elixir/OT
 - `mise-backend-pixi`: does `pixi:<tool>` transitively lock via `mise.lock`, and is the
   prefix `pixi:` (install name) vs `vfox-pixi:`? (Phase 0.)
 - Exact `gh release create` exit code on a pre-existing tag (confirm before Phase 4).
-- Whether `--with-ns` Emacs.app needs Info.plist/icon tweaks for stable aqua
-  extraction across refs.
-- Whether the `--with-ns` build runs `-nw` cleanly against system ncurses without a
-  bundled copy (Phase 1).
+- `--with-ns` Info.plist/icon — **RESOLVED (Phase 2):** the ns build emits a self-contained
+  `nextstep/Emacs.app` with a valid `Info.plist` (deep-signs cleanly). The final aqua extraction layout
+  (the `bin/` move) is Phase 4.
+- `-nw` on ncurses — **DEFERRED:** v1 is GUI-only; ncurses is bundled generically (the dylib resolves),
+  and working `-nw` is a post-Phase-4 fast-follow (§15).
 
 ## 14. Roadmap — shippable, independently-validated increments
 

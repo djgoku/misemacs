@@ -2,8 +2,9 @@
 [env]
 EMACS_REF = "master"   # git ref in emacsmirror/emacs (no-dash mirror; identical to emacs-mirror)
 
-# native-comp OFF (v1, no libgccjit); JSON is native on master (jansson removed upstream);
-# ncurses intentionally NOT requested → Emacs links system /usr/lib (spec §6.2).
+# native-comp OFF (v1, no libgccjit); JSON is native on master (jansson removed upstream).
+# ncurses links from the pixi env (texinfo pulls it); GUI-only v1 bundles it generically during
+# relocation, no terminfo work. emacs -nw is a post-Phase-4 fast-follow (spec §15).
 EMACS_CONFIGURE_FLAGS = "--with-ns --without-native-compilation --with-tree-sitter --with-xml2 --with-gnutls"
 
 # Activate the locked pixi build env (mise-env-pixi plugin): puts pkg-config / autoconf /
