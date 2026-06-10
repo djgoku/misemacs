@@ -1,2 +1,5 @@
 # Ephemeral Emacs source checkouts used by scripts/configure-check.sh (Phase 1 validation)
 /.work/
+
+# Phase 2 build + relocate output (ephemeral: source checkout, candidate Emacs.app, otool dumps)
+/build/
