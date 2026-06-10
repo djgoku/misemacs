@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# pipeline/build-emacs <version> — build a relocatable-CANDIDATE GUI Emacs.app from the per-version
+# pixi env. Output: build/<version>/Emacs.app (still linked to pixi @rpath libs) + conda-prefix-lib.txt
+# + otool-prereloc.txt. `mix relocate` makes it self-contained. native-comp OFF; GUI-only.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION="${1:-master}"
+VDIR="$HERE/versions/$VERSION"
+OUT="$HERE/build/$VERSION"; SRC="$OUT/src"
+PIXI=(mise exec -- pixi)
+[ -f "$VDIR/pixi.toml" ] || { echo "FATAL: $VDIR/pixi.toml missing"; exit 1; }
+EMACS_REF="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_REF:?}"')"
+EMACS_FLAGS="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_CONFIGURE_FLAGS:?}"')"
+mkdir -p "$OUT"
+echo ">> [1] fetch emacsmirror/emacs $EMACS_REF -> $SRC"
+if [ -d "$SRC/.git" ]; then
+  git -C "$SRC" fetch --depth 1 origin "$EMACS_REF"; git -C "$SRC" checkout -q -f FETCH_HEAD
+else
+  rm -rf "$SRC"; git clone --depth 1 --branch "$EMACS_REF" https://github.com/emacsmirror/emacs "$SRC"
+fi
+echo ">> [2] configure + make + install UNDER the pixi env"
+"${PIXI[@]}" run --manifest-path "$VDIR/pixi.toml" bash -euo pipefail -c '
+  cd "'"$SRC"'"
+  export PATH="$CONDA_PREFIX/bin:$PATH"
+  export PKG_CONFIG="$CONDA_PREFIX/bin/pkg-config" PKG_CONFIG_PATH="$CONDA_PREFIX/lib/pkgconfig"
+  ./autogen.sh
+  # -headerpad_max_install_names: room for install_name rewrites during relocation.
+  # -rpath,$CONDA_PREFIX/lib: the in-build DUMP step (temacs --temacs=pbootstrap) must load conda
+  #   @rpath dylibs (Phase-1 finding). Relocation deletes this rpath afterward.
+  ./configure '"$EMACS_FLAGS"' "LDFLAGS=-Wl,-headerpad_max_install_names -Wl,-rpath,$CONDA_PREFIX/lib"
+  make -j"$(sysctl -n hw.ncpu)"
+  make install
+  printf "%s/lib\n" "$CONDA_PREFIX" > "'"$OUT"'/conda-prefix-lib.txt"
+'
+echo ">> [3] locate the produced Emacs.app (--with-ns self-contained build → nextstep/Emacs.app)"
+appsrc="$(find "$SRC" -maxdepth 3 -type d -name Emacs.app | head -1)"
+[ -n "$appsrc" ] || { echo "FATAL: no Emacs.app produced — confirm the --with-ns self-contained build"; exit 1; }
+echo "   found $appsrc"
+rm -rf "$OUT/Emacs.app"; cp -R "$appsrc" "$OUT/Emacs.app"
+echo ">> [4] discovery: otool inventory of the built (pre-reloc) app"
+: > "$OUT/otool-prereloc.txt"
+while IFS= read -r f; do
+  file -b "$f" 2>/dev/null | grep -q Mach-O || continue
+  { echo "-- $f"; otool -L "$f" | sed -n '2,$p'; } >> "$OUT/otool-prereloc.txt"
+done < <(find "$OUT/Emacs.app" -type f)
+sed -i '' "s|$HOME|~|g" "$OUT/otool-prereloc.txt" 2>/dev/null || true
+echo ">> build-emacs: $OUT/Emacs.app ready (run 'mise run relocate' next)"
