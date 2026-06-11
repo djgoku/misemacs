@@ -26,7 +26,7 @@ as a reference; we publish releases there but rewrite the approach.
 - Full pipeline: detect-change → build → relocate → sign → package → publish →
   installable via `mise use aqua:djgoku/misemacs@<tag>`.
 
-**Designed-for, NOT built in v1 (see §13):** native-comp, Linux + more arches,
+**Designed-for, NOT built in v1 (see §15):** native-comp, Linux + more arches,
 precompiled elisp packages (vterm/pdf-tools/tree-sitter grammars), Developer ID +
 notarization, per-channel `latest` aliases.
 
