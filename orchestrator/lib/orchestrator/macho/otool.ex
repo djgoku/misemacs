@@ -38,6 +38,14 @@ defmodule Orchestrator.Macho.Otool do
     :ok
   end
 
+  @impl true
+  def verify_bundle(app) do
+    case System.cmd("codesign", ["--verify", "--deep", "--strict", app], stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      {out, _} -> {:error, String.trim(out)}
+    end
+  end
+
   defp run(path, cmd, args) do
     {out, _} = System.cmd(cmd, args ++ [path], stderr_to_stdout: true)
     out

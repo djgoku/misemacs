@@ -4,14 +4,16 @@ defmodule Orchestrator.Relocate do
   `Contents/Frameworks`, normalize ids/refs to `@rpath`, give each Mach-O a depth-correct
   `@loader_path` rpath, delete the build-time conda (foreign) rpath, then once all
   Mach-O edits are done deep ad-hoc sign the whole bundle (Decision C — single
-  `codesign --force --deep --sign -`; Phase 3 owns proper signing), then gate. Generic
-  over all Mach-O (no ncurses/terminfo special-case —
+  `codesign --force --deep --sign -`), verify the signature (`codesign --verify --deep --strict`
+  — Phase 3 invariant; Decision F: ad-hoc is sufficient, Developer ID deferred), then gate.
+  Generic over all Mach-O (no ncurses/terminfo special-case —
   GUI-only, spec §15). Reasoning is pure (`Orchestrator.Macho`); IO via a `Macho.Tool`
   (default `Orchestrator.Macho.Otool`), injectable for tests.
   """
   alias Orchestrator.Macho
 
-  @spec run(Path.t(), Path.t(), module) :: :ok | {:error, [Macho.violation()]}
+  @spec run(Path.t(), Path.t(), module) ::
+          :ok | {:error, [Macho.violation()] | {:signature_invalid, String.t()}}
   def run(app, build_libdir, tool \\ Orchestrator.Macho.Otool) do
     app = Path.expand(app)
     fw = Path.join([app, "Contents", "Frameworks"])
@@ -20,7 +22,15 @@ defmodule Orchestrator.Relocate do
     copy_closure(machos(app, tool), fw, build_libdir, tool)
     Enum.each(machos(app, tool), &rewrite(&1, fw, tool))
     tool.sign_bundle(app)
-    gate(app, fw, tool)
+
+    case tool.verify_bundle(app) do
+      :ok ->
+        gate(app, fw, tool)
+
+      {:error, reason} ->
+        IO.puts("sign_gate: FAIL — #{reason}")
+        {:error, {:signature_invalid, reason}}
+    end
   end
 
   defp machos(app, tool) do
