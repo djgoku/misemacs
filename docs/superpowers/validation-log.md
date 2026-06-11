@@ -112,3 +112,72 @@ mirror — identical SHA to `emacs-mirror/emacs`). Validated by `scripts/configu
 - The build-time `-Wl,-rpath,$CONDA_PREFIX/lib` is throwaway; relocation replaces it with an
   `@executable_path/../Frameworks` rpath + rewritten install names.
 - Un-fingerprinted host `make`/CLT gap (spec §8) still open — decide in Phase 2.
+
+---
+
+## 2026-06-10 — Phase 2: build + relocation (the crux)
+
+Environment: macOS 26.5 arm64, mise 2026.6.1, pixi 0.70.2 (repo-pinned), elixir 1.20.0-otp-29,
+Apple clang. Built + relocated `emacsmirror/emacs` master → **emacs 32.0.50**.
+
+### 0. Tooling split (decision) — hybrid bash build + Elixir relocation
+- **Build = bash** (`pipeline/build-emacs`): pixi env + autogen/configure/make/install — shell's home turf.
+- **Relocation + gate = Elixir** in the orchestrator (`Orchestrator.Macho` pure classify/relpath/parse/
+  gate_violations + `Macho.Tool` behaviour & `Macho.Otool` IO adapter + `Orchestrator.Relocate` runner +
+  `mix relocate` task), per spec D4/§7.1 (pure core + IO adapter, ExUnit). Replaces an initial bash
+  `lib/macho.sh` (the bash version hit a space-truncation parsing bug — a symptom of bash being the wrong
+  tool for structured otool output). Pure tests run everywhere; the real-binary integration test is
+  `@tag :macos` (orchestrator CI is ubuntu — `test_helper.exs` excludes `:macos` off Darwin).
+
+### 1. Build (`pipeline/build-emacs`) — PASS
+- `--with-ns` + `make install` produces a **self-contained `nextstep/Emacs.app`** in the build tree
+  (no `--prefix` needed; the assumption held — no script adjustment). Located via `find -maxdepth 3
+  -name Emacs.app`, copied to `build/master/Emacs.app`.
+- Build needs `LDFLAGS=-Wl,-headerpad_max_install_names -Wl,-rpath,$CONDA_PREFIX/lib` (the rpath is the
+  Phase-1 dump-step finding; relocation deletes it). `--batch` → `ok 32.0.50`.
+- Pre-reloc `otool -L` of the main binary: `@rpath/lib{gnutls.30,xml2.2,tree-sitter.0.26,ncurses.6}.dylib`
+  + system `/usr/lib/{libSystem.B,libobjc.A,libz.1,libsqlite3}`.
+
+### 2. Relocation (`Orchestrator.Relocate`) — generic Mach-O closure walk, PASS
+- BFS copies the full non-system (`@rpath/*` + foreign-absolute) dylib closure into `Contents/Frameworks`,
+  sets ids to `@rpath/<base>`, rewrites foreign-absolute refs to `@rpath`, gives each Mach-O a
+  depth-correct `@loader_path/<rel>` rpath, deletes the build-time `$CONDA_PREFIX/lib` rpath.
+- **Real Frameworks closure = 17 dylibs** (bigger than the spec sketch): gnutls, nettle, hogweed, gmp,
+  p11-kit, tasn1, idn2, unistring, **libffi, iconv, intl, lzma, libtinfo**, ncurses, tree-sitter, xml2,
+  **libz**. The generic walk correctly bundles conda's own `libz.1.dylib` (referenced `@rpath` by conda
+  libs) even though the Emacs main binary links `/usr/lib/libz.1.dylib` — both resolve independently.
+  ncurses bundled generically (`libncurses.6` + `libtinfo.6`); **`-nw`/terminfo out of scope** (§15).
+
+### 3. Signing (Decision C) — deep ad-hoc bundle sign, FIXED from per-Mach-O
+- **Bug found on the real bundle:** per-file `codesign -s - -f <Contents/MacOS/Emacs>` (the bundle main
+  executable) triggers codesign *bundle mode*, which fails on unsigned nested helpers
+  (`Contents/MacOS/libexec/rcs2log`, a script). The fake fixture (no Info.plist, no nested non-Mach-O
+  helpers) never hit this.
+- **Fix:** a single `codesign --force --deep --sign - <Emacs.app>` once at the end, after all
+  `install_name_tool` edits (`Macho.Tool` `resign/1` → `sign_bundle/1`). Validated: rc 0;
+  `codesign --verify --deep` → "valid on disk / satisfies its Designated Requirement". Fixture upgraded
+  to a real bundle (Info.plist + nested `libexec/helper.sh`) that reproduces + guards the regression.
+
+### 4. The gate (`Macho.gate_violations`) — PASS on the real app
+- Asserts: no foreign dependency path, no foreign LC_RPATH, every `@rpath/<lib>` present in Frameworks.
+- On `build/master/Emacs.app`: **PASS** — zero `.pixi`/homebrew/usr-local refs across every Mach-O;
+  main binary rpath = `@loader_path/../Frameworks` only.
+
+### 5. Clean-room (no-pixi) proof — PASS, locally, no VM needed
+- `mise run cleanroom` moves the **entire** `versions/master/.pixi` env aside, then launches the
+  relocated app. Result: `--batch` → `ok 32.0.50` (full dylib closure resolved from `Contents/Frameworks`
+  alone), **GUI frame smoke OK**, `emacsclient`/`etags`/`ebrowse` run; `.pixi` restored via `trap`.
+- **Clean-room mechanism = pregate, not a bespoke script.** `.pregate/macos.sh` runs build → relocate →
+  gate → `mise run cleanroom` ALL in the one fresh disposable macOS VM (fresh OS + toolchain, pixi env
+  moved aside). No second/nested VM (Apple Virtualization doesn't nest), no `sshpass`, no 50-80GB image
+  pull. The static gate + the moved-aside fixture test + this real-app moved-aside run together establish
+  self-containment without a separate pristine VM.
+
+### Decision E — host make/CLT fingerprint gap (spec §8): RESOLVED (record now, wire Phase 5)
+Fold `xcode-select -p` + `clang --version` (the CLT/SDK build string) into `toolchain_hash` when the
+fingerprint is consumed (Phase 5). A runner-image CLT/SDK bump then rebuilds all refs. No Phase-2 code.
+
+### rpath scheme (refines spec §9)
+Build-time `-rpath,$CONDA_PREFIX/lib` (for the dump step) is deleted by relocation; relocation adds a
+depth-correct `@loader_path/<rel-to-Frameworks>` rpath to every Mach-O (not the spec's
+`@executable_path/../Frameworks` sketch). Signing is a single deep ad-hoc bundle sign, last.
