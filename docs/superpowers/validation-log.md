@@ -181,3 +181,92 @@ fingerprint is consumed (Phase 5). A runner-image CLT/SDK bump then rebuilds all
 Build-time `-rpath,$CONDA_PREFIX/lib` (for the dump step) is deleted by relocation; relocation adds a
 depth-correct `@loader_path/<rel-to-Frameworks>` rpath to every Mach-O (not the spec's
 `@executable_path/../Frameworks` sketch). Signing is a single deep ad-hoc bundle sign, last.
+
+---
+
+## 2026-06-11 — Phase 3: signing (validation-driven; Decision F)
+
+Environment: macOS 26.5 (25F71) arm64, Gatekeeper "assessments enabled". Full
+proofs in `~/.claude/knowledge-base/macos-gatekeeper.md`; summarized here because
+the repo docs must stand alone.
+
+### 1. Quarantine/Gatekeeper evidence — ad-hoc IS sufficient for the aqua/mise path
+- **E1 — the real install path is quarantine-free:** both `mise use
+  aqua:djgoku/misemacs` installs under `~/.local/share/mise/installs/` have ZERO
+  `com.apple.quarantine` xattrs anywhere (`find … -exec xattr -l` → 0 hits); the
+  ad-hoc apps run. Gatekeeper only assesses quarantined files ⇒ it never sees us.
+- **E2 — curl sets no quarantine** (real release asset downloaded; no such xattr).
+- **E3 — CLI `/usr/bin/tar` does not propagate quarantine** from a quarantined
+  tarball (xattr verified on the archive; absent on extracted files). Finder/
+  Archive Utility extraction untested — assumed quarantining; out of scope.
+- **E4 — quarantined ad-hoc code IS blocked:** a fresh never-executed ad-hoc
+  binary with `com.apple.quarantine` (0081 and Safari-style 0083) hangs/denied at
+  exec; its unquarantined twin runs. So browser-download distribution would NOT
+  work today — that is the Developer-ID trigger, not a v1 problem.
+- **E5 — `spctl -a -t exec` "rejected" ≠ broken:** the ad-hoc Emacs.app is
+  policy-rejected while `codesign --verify --deep --strict` passes; policy only
+  applies to quarantined files (E1–E3).
+- **E6 — Gatekeeper caches approval by cdhash:** quarantining an already-run
+  binary does not block it. (Testing gotcha: GK experiments need fresh binaries.)
+
+### 2. Transport proof — the ad-hoc bundle runs on a machine that never built it
+- Mechanism: pregate `--cmd` into a fresh `macos-tahoe-base` VM (empty
+  Gatekeeper/cdhash cache = a true "second arm64 Mac"); working tree piped in
+  with the relocated app at `build/master/` via pregate's xattr-stripping
+  `COPYFILE_DISABLE=1 tar --no-xattrs` — the same xattr-losing class of
+  transport as the real channel (aqua's Go tar extraction).
+- **RESULT: PASS** — in the guest: `--batch` printed `32.0.50`;
+  `codesign --verify --strict` PASSED on individual Mach-O files post-transport
+  (`Contents/Frameworks/libgnutls.30.dylib`, `Contents/MacOS/bin/emacsclient`,
+  → `EMBEDDED-SIGS-OK`); GUI frame smoke → `GUI-OK`.
+- Bundle-level `codesign --verify --deep --strict` in the guest: **FAIL,
+  expected and root-caused** (E7 below) — "code object is not signed at all /
+  In subcomponent: …/Contents/MacOS/libexec/Emacs.pdmp" (exit 1). The first
+  (uncorrected) proof run asserted exactly this and "failed"; systematic
+  debugging turned it into E7 rather than a Developer-ID pivot.
+
+### 3. E7 — `--deep` xattr-signs non-Mach-O nested code; tar strips it; launch doesn't care
+- The deep ad-hoc sign stores signatures for the bundle's only two non-Mach-O
+  nested-code files (`Contents/MacOS/libexec/Emacs.pdmp`, `…/rcs2log`) in
+  `com.apple.cs.{CodeDirectory,CodeRequirements,CodeSignature}` XATTRS (full-
+  bundle xattr inventory: exactly those two). Embedded Mach-O signatures are
+  content-borne and unaffected.
+- Any xattr-stripping transport (pregate's tar flags; aqua's Go extraction,
+  which never restores macOS xattrs) drops them ⇒ bundle-level
+  `codesign --verify` fails — deep AND non-deep, and even pointed at the main
+  executable (bundle mode kicks in). Control: a default bsdtar round trip
+  (xattrs ride in PAX headers) verifies clean — single-variable proof.
+- Launch is unaffected: the stripped app runs `--batch` on the host and in the
+  pristine VM (+ GUI) — arm64/AMFI consult only embedded Mach-O signatures.
+  Ground truth: the SHIPPED aqua-installed release on this machine has zero
+  `com.apple.cs.*` xattrs, FAILS deep verify ("code has no resources but
+  signature indicates they must be present"), and runs fine — post-install
+  bundle verification was never a property of this channel.
+- Consequences: (1) full-bundle codesign verification is a BUILD-TIME invariant
+  (`verify_bundle`, §5 below), asserted before packaging — never a post-install
+  check; (2) transported integrity is checked per-Mach-O (non-main-exe files
+  don't trigger bundle mode); (3) Phase 4 should create the release tarball
+  WITHOUT xattrs deliberately (deterministic assets; consumers lose them
+  anyway — spec §10); (4) a future Developer-ID path that wants post-install
+  verification must also switch the download container to an xattr-preserving
+  format (dmg/zip) — spec §15.
+
+### 4. Decision F — ad-hoc sufficient for v1; Developer ID + notarization DEFERRED
+Grounds: E1–E5 + the transport proof. Entitlements/hardened runtime: not needed
+(notarization-era concerns; ad-hoc carries neither). Revisit triggers (any one):
+browser-download installation becomes a goal; a macOS release quarantines the
+aqua/mise path or tightens exec policy; enterprise/MDM rejections reported.
+Deferred-path seam: swap the `-` identity in `Macho.Tool.sign_bundle/1` for a
+cert from CI secrets + `--options runtime` (+ entitlements if Emacs's dumper
+needs them) + a `notarytool submit --wait`/`stapler staple` stage between sign
+and package — gated on secret presence so contributor builds stay ad-hoc.
+
+### 5. verify_bundle invariant (the one Phase-3 code change)
+`Orchestrator.Relocate.run/3` now fails with `{:error, {:signature_invalid, …}}`
+unless `codesign --verify --deep --strict` passes after the deep ad-hoc sign
+(`sign_gate: PASS/FAIL` alongside `macho_gate`). Validated: tampering a sealed
+Frameworks dylib post-sign → "main executable failed strict validation /
+In subcomponent: …" (regression-tested with a tamper-after-sign tool stub in
+`relocate_test.exs`). Runs at relocation time — before packaging — where the
+xattr-borne signatures (E7) are still intact, so the full deep verify is
+meaningful there and only there.

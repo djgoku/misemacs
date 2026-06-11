@@ -26,7 +26,7 @@ as a reference; we publish releases there but rewrite the approach.
 - Full pipeline: detect-change → build → relocate → sign → package → publish →
   installable via `mise use aqua:djgoku/misemacs@<tag>`.
 
-**Designed-for, NOT built in v1 (see §13):** native-comp, Linux + more arches,
+**Designed-for, NOT built in v1 (see §15):** native-comp, Linux + more arches,
 precompiled elisp packages (vterm/pdf-tools/tree-sitter grammars), Developer ID +
 notarization, per-channel `latest` aliases.
 
@@ -38,7 +38,7 @@ notarization, per-channel `latest` aliases.
 | D2 | native-comp | **Disabled** for v1 | Avoids `libgccjit` bundling; large simplification |
 | D3 | v1 targets | **macOS arm64 only** | Start single, validate end-to-end, extend trivially |
 | D4 | Orchestration brain | **Elixir** (pure decision fns) + **mise** (input locking) + **bash** (glue) | mise has no cross-run memory → wrong tool for change detection; keep its strength, put decisions in testable Elixir |
-| D5 | Signing | **Ad-hoc, signed last** (Developer ID deferred) | **Assumed sufficient** — existing `djgoku/misemacs` releases already install on other Macs; optionally double-validate in Phase 3. Relocation invalidates sigs ⇒ sign last regardless |
+| D5 | Signing | **Ad-hoc, signed last** (Developer ID deferred) | **Validated sufficient** (Phase 3, Decision F): the aqua/mise install path is quarantine-free (curl/CLI-tar set no quarantine; real installs verified clean), so Gatekeeper never assesses the bundle; transport-proven in a pristine VM. Developer ID deferred (§15). Relocation invalidates sigs ⇒ sign last regardless |
 | D6 | Release target repo | **`djgoku/misemacs`** | Existing aqua registry already points here; zero registry edits |
 | D7 | Reproducibility | **Pixi project** (`pixi.toml` + committed `pixi.lock`) for C libs, activated via `mise-env-pixi` | `pixi.lock` locks the full transitive closure; closes mise/conda's transitive-lock gap |
 | D8 | Dep sourcing order | **mise registry → aqua → pixi/conda** (pixi via the mise pixi plugins, local-first) | Pipeline toolchain via registry/aqua (locked in `mise.lock`); Emacs C libs via the pixi project (locked in `pixi.lock`) |
@@ -302,8 +302,14 @@ skip with a warning (never treated as "changed").
    moved aside (§11.3).
 3. **sign (Decision C):** a single **deep** ad-hoc sign of the whole bundle, **last**
    (`codesign --force --deep --sign -`) — per-file signing of the bundle main executable triggers
-   bundle-mode codesign that fails on nested helpers (`libexec/rcs2log`). Developer ID + notarization
-   deferred (§13/Phase 3).
+   bundle-mode codesign that fails on nested helpers (`libexec/rcs2log`). After signing, relocation
+   verifies the signature (`codesign --verify --deep --strict`, `Macho.Tool.verify_bundle/1`) and
+   fails on any invalidity — the signature is a gated invariant, not a fire-and-forget step (Phase 3).
+   **Bundle-level verification is build-time-only:** the deep sign stores signatures for the two
+   non-Mach-O nested-code files (`Emacs.pdmp`, `rcs2log`) in `com.apple.cs.*` xattrs, which do not
+   survive tar/aqua transport (Phase 3, E7) — post-install bundle verify is not a supported check;
+   embedded Mach-O signatures (the thing launch enforces) survive by construction. Developer ID +
+   notarization deferred (Decision F, §15).
 
 ## 10. Packaging & the aqua contract (verified from the registry branch)
 
@@ -313,6 +319,9 @@ skip with a warning (never treated as "changed").
   (registry template `misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.{{.Format}}`,
   `format=tar.gz`, `darwin→macos`, `{{.Version}}` = the git tag).
 - **Checksums:** `SHASUMS256.txt` (sha256).
+- **Xattrs:** create the tarball **without** macOS xattrs (e.g. `COPYFILE_DISABLE=1 tar --no-xattrs`) —
+  the xattr-borne codesign signatures on `Emacs.pdmp`/`rcs2log` don't survive aqua's Go extraction
+  anyway (Phase 3, E7), and xattr-free archives are deterministic. (Wire in Phase 4.)
 - **Internal layout (contractual):** the tarball unpacks to a top dir named exactly
   like the asset stem, containing:
   ```
@@ -321,8 +330,10 @@ skip with a warning (never treated as "changed").
   …/Contents/MacOS/bin/etags
   …/Contents/MacOS/bin/ebrowse
   ```
-  Note: `emacsclient/etags/ebrowse` must be placed under `Contents/MacOS/bin/` — this
-  is **not** Emacs's default install layout; the bundle step moves them there.
+  Note: `emacsclient/etags/ebrowse` must be placed under `Contents/MacOS/bin/` — validated
+  Phase 3: the `--with-ns` `make install` **already** produces exactly this layout, so the
+  "bin/ move" is a no-op check, and nothing mutates the bundle after the Phase-2/3 deep
+  sign + verify.
 
 **Install invocation:** `mise use aqua:djgoku/misemacs@<tag>` (the dated tag is the
 aqua *version*, e.g. `@emacs-master-2026-06-05`). `lib/naming` is the sole owner of
@@ -383,7 +394,7 @@ run *by construction* (identical tasks), caught **before** pushing:
 
 | Risk | Mitigation |
 |---|---|
-| Ad-hoc `.app` blocked on other Macs (Gatekeeper/quarantine) | **Assumed OK** — existing `djgoku/misemacs` releases already install on other Macs; *optionally* double-validate on a 2nd Mac in Phase 3; Developer ID is the fallback (§13) |
+| Ad-hoc `.app` blocked on other Macs (Gatekeeper/quarantine) | **RESOLVED (Phase 3, Decision F)** — the aqua/mise path never sets `com.apple.quarantine` (validated: curl, CLI tar, real installs), so Gatekeeper never assesses; transport-proven in a pristine VM (runs + embedded Mach-O sigs verify). Quarantined ad-hoc *is* blocked (validated), so browser-download distribution stays unsupported until the Developer-ID enhancement (§15) |
 | Mach-O header overflow on relink | `-Wl,-headerpad_max_install_names`; the `Orchestrator.Macho` gate verifies via `otool` and fails loudly |
 | Incomplete dylib closure (breaks only on clean machine) | Transitive walk; `otool` gate asserts zero non-system refs; smoke-launch on a clean runner — and locally in a clean macOS VM via **pregate** before CI (§11.3) |
 | Naming drift vs. aqua registry | `lib/naming` is sole owner + contract test against the registry template |
@@ -403,10 +414,15 @@ closure; `macos-14` is arm64; on arm64 binaries must be ≥ad-hoc signed and
 `install_name_tool` invalidates signatures (sign last); GHA dynamic matrix via job
 outputs, schedule passes no inputs, `action-gh-release` idempotent, `concurrency`
 semantics; local toolchain present (mise 2026.6.0, aqua 2.59, gh 2.92, elixir/OTP 28).
+**Phase 3 (signing):** Gatekeeper only assesses quarantined files; curl + CLI tar
+set/propagate no quarantine and real aqua/mise installs carry none ⇒ ad-hoc suffices
+on the supported path; quarantined ad-hoc blocks (the Dev-ID trigger); `spctl -a`
+rejection of ad-hoc is expected and harmless; GK approval caches by cdhash;
+`--deep` xattr-signs non-Mach-O nested code (`Emacs.pdmp`/`rcs2log`) and tar/Go
+extraction strips those sigs — bundle verify is build-time-only, launch unaffected
+(E1–E7, validation log + KB macos-gatekeeper.md).
 
 **Open** (resolve during implementation):
-- Ad-hoc on a *second* arm64 Mac via the aqua path — **assumed OK** (existing
-  `djgoku/misemacs` releases install elsewhere); optional confirm in Phase 3.
 - conda-forge `tree-sitter` provides `libtree-sitter`+headers — **RESOLVED: KEEP**
   (`libtree-sitter` + headers + `tree-sitter.pc` confirmed clean on osx-arm64, Phase 1).
 - jansson / `--with-json` — **RESOLVED: removed upstream on `master`** (native JSON parser
@@ -429,7 +445,7 @@ Cheap/risky things proven before macOS minutes are spent.
 | **0 Skeleton & contracts** (free) | manifest model + `lib/naming`; Elixir `Core.{Hash,Detect,Tag,Decide,Latest}` | unit tests on fixtures: names match aqua template verbatim; "no change ⇒ no release"; `.N` collisions; first-run base case. Also confirm the mise pixi plugins install + the `pixi:<tool>` prefix + whether `pixi:<tool>`/`pixi.lock` lock transitively |
 | **1 Reproducible deps** (local) | per-version pixi PROJECT (`pixi.toml`/`pixi.lock`) via `mise-env-pixi`; `configure`-only run | all deps resolve on osx-arm64 (esp. gnutls closure); **decide tree-sitter in/out** (drop if libtree-sitter isn't clean); configure detects ns/json/xml2/gnutls (+tree-sitter if kept), native-comp off; built Emacs runs `-nw` (throwaway build; ncurses links from pixi → bundled in Phase 2, GUI-only, `-nw` deferred §15); direct-`pixi` fallback verified |
 | **2 Build + relocation** (crux) | bash `build-emacs` + Elixir `Orchestrator.Relocate`/`mix relocate` + `Macho` gate | self-contained `.app` launches with the pixi env moved aside / on a **clean** pregate VM; gate green |
-| **3 Signing** | ad-hoc sign-last | **assumed good** (existing `djgoku/misemacs` releases install on other Macs); *optionally* double-validate on a 2nd Mac; Developer ID only if it fails |
+| **3 Signing** | ad-hoc sign-last | **DONE:** quarantine/Gatekeeper evidence recorded (E1–E7); transport proof in a pristine VM green (runs + embedded sigs; bundle verify build-time-only per E7); `verify_bundle` invariant in `Relocate` + regression test; Decision F (Developer ID deferred with explicit triggers, §15) |
 | **4 Package + publish** | `package` to exact aqua layout + `SHASUMS256.txt`; `publish` (tag/`.N`/latest/manifest) | `mise use aqua:djgoku/misemacs@<tag>` installs & runs end-to-end on a clean box |
 | **5 Automate** | decide-gate + daily cron + dynamic matrix + PR dry-run + force-build | run twice/day → 2nd skips; forced change → only that ref; partial-failure releases good cells |
 | **6 Prove "trivial to add"** | add `emacs-30.x` via data only | builds & releases with **zero stage/code change** |
@@ -449,8 +465,16 @@ Cheap/risky things proven before macOS minutes are spent.
   fingerprint (§8), so adding one triggers a rebuild. **Deliberately deferred to a
   post-v1 design pass:** the *user-facing customization UX* — how packages are declared,
   how their versions are pinned/locked, and one-fat-bundle vs. a separate asset variant.
-- **Developer ID + notarization:** add behind CI secrets if Phase 3 shows ad-hoc is
-  insufficient; pipeline still builds without secrets for contributors.
+- **Developer ID + notarization (Decision F: deferred — ad-hoc validated sufficient for
+  the quarantine-free aqua/mise path):** revisit if browser-download installation becomes
+  a goal, a macOS release starts quarantining/assessing the CLI install path, or
+  enterprise/MDM users hit rejections. Seam: swap the `-` identity in
+  `Macho.Tool.sign_bundle/1` for a cert from CI secrets + `--options runtime`
+  (+ entitlements if Emacs's dumper needs them), then a `notarytool submit --wait` +
+  `stapler staple` stage between sign and package — gated on secret presence so
+  contributor builds (no secrets) stay ad-hoc. If post-install verification matters
+  then, also switch the download container to an xattr-preserving format (dmg/zip) —
+  tar.gz loses the xattr-borne signatures on non-Mach-O nested files (E7).
 - **Per-channel `latest` aliases** once >1 channel exists.
 - **Terminal Emacs (`emacs -nw`)** — v1 ships **GUI-only** (`Emacs.app`); the NS GUI never
   initializes terminfo, so `-nw` is deliberately **not gated** in Phase 2 and ncurses is just

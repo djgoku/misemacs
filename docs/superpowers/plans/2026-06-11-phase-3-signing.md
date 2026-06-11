@@ -283,28 +283,34 @@ Expected: `HOST-SIG-OK`.
 
 - [ ] **Step 2: Run the transport proof in a fresh macOS VM**
 
+> **REVISED during execution (2026-06-11).** The original command asserted
+> in-guest `codesign --verify --deep --strict` on the bundle and FAILED:
+> "code object is not signed at all / In subcomponent: …/libexec/Emacs.pdmp".
+> Systematic debugging root-caused it (validation log E7): `--deep` stores
+> signatures for the two non-Mach-O nested-code files (`Emacs.pdmp`, `rcs2log`)
+> in `com.apple.cs.*` xattrs, which pregate's `tar --no-xattrs` transport — and
+> equally the real aqua/Go extraction — strips. Launch only consults embedded
+> Mach-O signatures, so the correct post-transport assertions are: the app RUNS,
+> and individual (non-main-exe) Mach-O signatures verify; the bundle deep-verify
+> is captured as informational (expected fail). The command below is the
+> corrected one that was actually run.
+
 The VM (`ghcr.io/cirruslabs/macos-tahoe-base:latest`) never built the app and has
 an empty Gatekeeper/cdhash cache — it is the "second arm64 Mac". pregate pipes the
 tree (including `build/`, ~150 MB — expect a few extra minutes over the usual
 ~39 s VM-ready time) and runs the command in the guest:
 
 ```bash
-pregate --macos --verbose --cmd 'codesign --verify --deep --strict ./build/master/Emacs.app && ./build/master/Emacs.app/Contents/MacOS/Emacs --batch --eval "(progn (princ emacs-version) (terpri))"'
+pregate --macos --verbose --cmd './build/master/Emacs.app/Contents/MacOS/Emacs --batch --eval "(progn (princ emacs-version) (terpri))" && codesign --verify --strict ./build/master/Emacs.app/Contents/Frameworks/libgnutls.30.dylib && codesign --verify --strict ./build/master/Emacs.app/Contents/MacOS/bin/emacsclient && echo EMBEDDED-SIGS-OK && { codesign --verify --deep --strict ./build/master/Emacs.app 2>&1; echo deep-verify-exit=$?; ./build/master/Emacs.app/Contents/MacOS/Emacs -Q --eval "(run-with-timer 1 nil (lambda () (kill-emacs 0)))" 2>/dev/null && echo GUI-OK || echo "GUI skipped (no display)"; }'
 ```
 
-Expected: pregate reports `macos PASS`; the log shows the codesign verify
-succeeding and `32.0.50` (or current master) printed by `--batch`.
+Expected: pregate reports `macos PASS`; the log shows `32.0.50` (or current
+master) from `--batch`, `EMBEDDED-SIGS-OK`, `deep-verify-exit=1` (the expected
+E7 artifact), and `GUI-OK` (or "GUI skipped" — `--batch` is the hard gate,
+exactly as in `mise run cleanroom`).
 
-GUI smoke (best-effort, same invocation style as `mise run cleanroom`): if the
-guest session allows it, additionally run:
-
-```bash
-pregate --macos --verbose --cmd './build/master/Emacs.app/Contents/MacOS/Emacs -Q --eval "(run-with-timer 1 nil (lambda () (kill-emacs 0)))"'
-```
-
-Expected: PASS if the VM has a window session; if it fails for display reasons,
-record "GUI skipped (no display in VM)" — `--batch` is the hard gate, exactly as
-in `mise run cleanroom`.
+Actual result (2026-06-11): `32.0.50`, `EMBEDDED-SIGS-OK`, deep-verify FAIL on
+`Emacs.pdmp` with exit 1 (expected), `GUI-OK` — **PASS**.
 
 - [ ] **Step 3: Capture the evidence**
 
@@ -323,6 +329,12 @@ not the quarantine findings; do not jump to Developer ID (spec §3.2).
 - Modify: `docs/superpowers/specs/2026-06-05-bundled-emacs-build-system-design.md`
 
 - [ ] **Step 1: Append the Phase 3 section to `docs/superpowers/validation-log.md`**
+
+> **REVISED during execution (2026-06-11):** the committed validation-log section
+> supersedes this template — it additionally contains **E7** (the xattr-borne
+> nested-code signature finding from Task 2's debugging) and the corrected
+> transport-proof results; section numbering shifted accordingly (Decision F = §4,
+> verify_bundle = §5). The template below is the historical baseline.
 
 Append at the end of the file (fill the two `<RESULT: …>` slots from Task 2 Step 3
 — everything else is already-validated fact):

@@ -6,8 +6,14 @@ defmodule Mix.Tasks.Relocate do
   @impl true
   def run([app, build_libdir]) do
     case Orchestrator.Relocate.run(app, build_libdir) do
-      :ok -> :ok
-      {:error, _violations} -> Mix.raise("relocation gate failed: bundle is not self-contained")
+      :ok ->
+        :ok
+
+      {:error, {:signature_invalid, reason}} ->
+        Mix.raise("bundle signature verification failed: #{reason}")
+
+      {:error, _violations} ->
+        Mix.raise("relocation gate failed: bundle is not self-contained")
     end
   end
 

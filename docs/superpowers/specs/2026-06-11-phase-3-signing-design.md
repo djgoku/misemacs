@@ -99,6 +99,15 @@ This is a validation task whose *output* is a validation-log entry.
 **If it fails:** that falsifies signature-transport, not quarantine behavior —
 debug before touching the Developer-ID question (per systematic-debugging).
 
+> **Execution note (2026-06-11):** exactly this branch occurred. The in-guest
+> *bundle* deep-verify failed; debugging root-caused it to xattr-borne signatures
+> on the two non-Mach-O nested-code files (`Emacs.pdmp`, `rcs2log`) that no
+> tar/Go-extract transport preserves (validation log **E7**). The proof's
+> assertions were corrected to what the channel actually guarantees — app runs +
+> individual Mach-O signatures verify — and **passed** in the pristine VM
+> (`32.0.50`, `EMBEDDED-SIGS-OK`, `GUI-OK`). Bundle-level verification is
+> build-time-only (`verify_bundle`); Decision F stands unchanged.
+
 ### 3.3 Decision F + docs reconcile
 
 **Decision F — ad-hoc signing is sufficient for v1; Developer ID + notarization
