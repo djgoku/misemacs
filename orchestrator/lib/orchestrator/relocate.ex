@@ -25,6 +25,7 @@ defmodule Orchestrator.Relocate do
 
     case tool.verify_bundle(app) do
       :ok ->
+        IO.puts("sign_gate: PASS (#{app} signature valid)")
         gate(app, fw, tool)
 
       {:error, reason} ->
