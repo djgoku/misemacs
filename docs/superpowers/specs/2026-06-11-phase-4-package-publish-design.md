@@ -62,7 +62,7 @@ G4/P11); `-nw` (§15 fast-follow); Developer ID (Decision F stands); updating th
 | G4 | Determinism | Defer byte-reproducibility. Keep `COPYFILE_DISABLE=1 tar --no-xattrs` (E7/§10) | P11: nothing consumes it; rebuilds differ anyway |
 | G5 | Registry vendoring | Commit `aqua/registry.yaml` (contract-equivalent to the served one); contract test asserts `Naming` ↔ file agreement via line-presence checks (no YAML dep) | P7: the consumed URL points into this repo on main — the cutover push must not break installs |
 | G6 | Checksums | `package` self-verifies (`shasum -c`) before any network call | P9: the installer won't catch a bad SHASUMS — we must |
-| G7 | Lab repo | `djgoku/misemacs-phase4-lab` stays alive through Phase-4 implementation (dress rehearsals), then the user deletes it (token lacks `delete_repo`) | Rehearsal target with zero real-repo risk |
+| G7 | Lab repo | `djgoku/misemacs-phase4-lab` stays alive **and public** through Phase-4 implementation (the E2E guest is credential-free: registry fetch, API resolution, and asset download are all unauthenticated), then the user deletes it (token lacks `delete_repo`) | Rehearsal target with zero real-repo risk |
 | G8 | Guard rails | `publish`/`promote`/cleanup require an explicit `--repo`; targeting `djgoku/misemacs` additionally requires `MISEMACS_PUBLISH_OK=1`; every real-repo mutation gets per-run user approval | Standing constraint: real-repo release/tag changes need explicit go-ahead each time |
 
 ## 4. Design
@@ -82,21 +82,34 @@ paths appear verbatim and agree with `Naming.asset_name/3`,
 `Naming.checksums_filename/0`, and `Naming.bundle_binaries/0` (string/regex
 checks — no YAML dependency). Drift in either direction breaks the suite.
 
-### 4.2 `mix release.names` (pure wrapper)
+### 4.2 `mix release.names` (pure wrapper, two modes)
 
 ```
+# snapshot mode (publish's tag computation):
 mix release.names --channel master --date 2026-06-11 --os macos --arch arm64 \
                   --tags-file -          # newline-separated tag snapshot on stdin (or a path)
+# given-tag mode (package, pregate's sentinel tag — skips Core.Tag, no snapshot):
+mix release.names --tag emacs-master-2026-06-11 --os macos --arch arm64
+
 → stdout:  tag=emacs-master-2026-06-11
            asset=misemacs-emacs-master-2026-06-11-macos-arm64.tar.gz
            stem=misemacs-emacs-master-2026-06-11-macos-arm64
            checksums=SHASUMS256.txt
+           bin=Emacs.app/Contents/MacOS/Emacs              # one bin= line per
+           bin=Emacs.app/Contents/MacOS/bin/emacsclient    # Naming.bundle_binaries/0
+           bin=Emacs.app/Contents/MacOS/bin/etags          # entry (layout/tar checks)
+           bin=Emacs.app/Contents/MacOS/bin/ebrowse
 ```
 
-Tag via `Core.Tag.next_tag/3` (`.N` from the snapshot — the retry-on-conflict
-contract in its moduledoc is now exercised for real); names via `Naming`. The
-caller supplies the date (`date -u +%F`) and the snapshot — the task stays pure
-over its inputs and fully ExUnit-testable (`Mix.Task.rerun/2` + `capture_io`).
+Snapshot mode computes the tag via `Core.Tag.next_tag/3` (`.N` from the
+snapshot — the retry-on-conflict contract in its moduledoc is now exercised for
+real); given-tag mode emits names for an explicit tag (what `package` needs on
+the §4.5 retry path, where the recomputed tag is passed in, and what pregate's
+sentinel tag requires — `next_tag` could never produce it). Both modes emit the
+same `key=value` output, names via `Naming` only: **bash never re-derives a
+name string or binary path** (sole-owner constraint). The caller supplies the
+date (`date -u +%F`) and the snapshot — the task stays pure over its inputs and
+fully ExUnit-testable (`Mix.Task.rerun/2` + `capture_io`).
 
 ### 4.3 `mix release.manifest` (thin IO edge, no network)
 
@@ -107,27 +120,36 @@ mix release.manifest --version master --tag <tag> --upstream-sha <sha> --out bui
 Reads exactly the §8 fingerprint inputs — repo `mise.toml` + `mise.lock`
 (`toolchain_hash`) and `Manifest.version_input_files("master")` — computes
 `inputs_hash` via `Core.Hash`, and emits the schema-1 JSON (§7.2) with Elixir's
-built-in `JSON`. Using `Core.Hash` here guarantees Phase 5's `detect-changes`
-recomputes bit-identical fingerprints; a hand-written manifest would risk a
-permanent "changed" verdict. `--upstream-sha` comes from the package stage —
+built-in `JSON`. Using `Core.Hash` guarantees Phase 5's `detect-changes`
+recomputes bit-identical fingerprints *over the same input set* — Decision E
+still extends `toolchain_hash` with the CLT fingerprint in Phase 5, and nothing
+Phase 4 persists constrains that (G2/P10: no Phase-4 manifest survives on the
+real repo). A hand-written manifest would risk a permanent "changed" verdict. `--upstream-sha` comes from the package stage —
 the sha actually built, recorded from `build/<version>/src` (§4.4 step 7).
 
 ### 4.4 `pipeline/package <version> <tag>` (bash, `build-emacs` conventions)
 
 1. **Preconditions:** `build/<version>/Emacs.app` exists (relocated + signed —
-   `relocate` already ran `verify_bundle`, the build-time-only deep verify, E7).
-2. **Layout check (never move):** every `Naming.bundle_binaries/0` path exists
-   and is executable (Phase 3 validated `make install` already emits
+   `relocate` already ran `verify_bundle`, the build-time-only deep verify, E7),
+   **and** an upstream-sha source: `build/<version>/src` as a git checkout, or
+   `--upstream-sha <sha>` for artifacts reused without their source tree (the
+   §5 step-1 case if the worktree copy lacks `src/`).
+2. **Layout check (never move):** every `bin=` path from `release.names`
+   (given-tag mode, §4.2 — i.e. `Naming.bundle_binaries/0`) exists and is
+   executable (Phase 3 validated `make install` already emits
    `Contents/MacOS/bin/{emacsclient,etags,ebrowse}`); fail loudly otherwise.
    **Nothing mutates the bundle after sign+verify.**
 3. **Stage:** `dist/<version>/stage/<stem>/Emacs.app` via APFS clone
-   (`cp -c -R`, fallback `cp -Rp`) — `<stem>` from `release.names`.
+   (`cp -c -R`, fallback `cp -Rp`) — `<stem>` from `release.names` given-tag
+   mode on this stage's `<tag>` argument.
 4. **Tar:** `COPYFILE_DISABLE=1 tar --no-xattrs -czf <asset> -C stage <stem>`
    (spec §10 bullet; the xattr-borne pdmp/rcs2log signatures die in transport
    anyway — E7 — and xattr-free archives are clean for Linux-guest tooling).
-5. **Checksums:** `shasum -a 256 <asset> > SHASUMS256.txt` (P14 format).
+5. **Checksums:** `shasum -a 256 <asset> > SHASUMS256.txt`, run with cwd
+   `dist/<version>` so the entry is the bare asset filename (P14 format; aqua
+   matches by asset name, and step 6's `shasum -c` needs the same cwd).
 6. **Self-verify (all local, before any gh call):** `shasum -c`; `tar -tzf`
-   asserts the stem prefix + all four binaries; extract to a temp dir and run
+   asserts the stem prefix + all four `bin=` paths; extract to a temp dir and run
    the **transport smoke** — `Emacs --batch` version print + per-Mach-O
    `codesign --verify --strict` on the Phase-3 sentinels
    (`Contents/Frameworks/libgnutls.30.dylib`, `Contents/MacOS/bin/emacsclient`)
@@ -135,7 +157,8 @@ the sha actually built, recorded from `build/<version>/src` (§4.4 step 7).
    This is the E7-correct packaged-artifact check (bundle-level deep verify is
    build-time-only and already happened in `relocate`).
 7. **Record:** `dist/<version>/upstream-sha.txt` from
-   `git -C build/<version>/src rev-parse HEAD` (input to `release.manifest`).
+   `git -C build/<version>/src rev-parse HEAD`, or from `--upstream-sha` when
+   supplied (input to `release.manifest`).
 
 Output dir: `dist/<version>/` (gitignored): `<asset>`, `SHASUMS256.txt`,
 `upstream-sha.txt`. Pregate's macOS recipe appends `mise run package` with a
@@ -150,10 +173,12 @@ pipeline/publish --repo <owner/repo> [--version master]
 
 1. **Guard rails (G8):** `--repo` required; `djgoku/misemacs` additionally
    requires `MISEMACS_PUBLISH_OK=1`.
-2. **Tag snapshot:** `git ls-remote --tags <repo>` ∪ `gh release list`
-   tag-names. (Union because P2 shows dangling tags get adopted — they must
-   count as taken so a half-failed prior run yields `.N+1`, not adoption — and
-   release names are the actual collision surface, P1.)
+2. **Tag snapshot:** `git ls-remote --tags <repo>` ∪ `gh release list
+   --limit 1000` tag-names. (Union because P2 shows dangling tags get adopted —
+   they must count as taken so a half-failed prior run yields `.N+1`, not
+   adoption. `ls-remote` is the complete side; the release-list side is
+   defense-in-depth — its only unique contribution is draft-held names, P4 —
+   and `gh release list` truncates at 30 without `--limit`.)
 3. `mix release.names` → `tag`, `asset`, `stem`.
 4. `pipeline/package <version> <tag>`.
 5. `gh release create <tag> --repo <repo> --title <tag> --latest=false
@@ -172,8 +197,11 @@ pipeline/promote --repo <owner/repo> --tag <tag> [--version master]
 ```
 
 `mix release.manifest` (upstream sha from `dist/`) → `gh release upload <tag>
-build-manifest.json --clobber` → `gh release edit <tag> --latest`. Atomic and
-reversible (P3). Same G8 guard rails. Phase 4 proves it on the lab repo so
+build-manifest.json --clobber` → `gh release edit <tag> --latest`. Two
+mutations: the upload is idempotent via `--clobber` (P6), the flip is atomic
+and reversible (P3) — so the rerun path after any failure is simply "run
+promote again", and an upload-succeeded/flip-failed intermediate leaves the
+marker unmoved. Same G8 guard rails. Phase 4 proves it on the lab repo so
 Phase 5 only has to schedule it; the real repo's first promote is Phase 5's
 first kept release.
 
@@ -193,8 +221,9 @@ find <install> … com.apple.quarantine → must be zero (E1 invariant holds via
 ```
 
 - **Lab run:** registry URL = the lab repo's raw `main/aqua/registry.yaml`
-  (`repo_owner/repo_name` point at the lab), tarball = the **real 150 MB
-  artifact** published by our own `publish` — the full-fidelity dress rehearsal.
+  (`repo_owner/repo_name` point at the lab; repo must be public — G7 — since
+  the guest carries no credentials), tarball = the **real 150 MB artifact**
+  published by our own `publish` — the full-fidelity dress rehearsal.
 - **Real run:** registry URL = the real consumed URL (P7 — today it still
   serves the old-system file, whose contract is identical), package =
   `aqua:djgoku/misemacs@<tag>`. Passing this **is** the §14 DoD.
@@ -228,8 +257,9 @@ cannot fire accidentally).
   network call**; everything under `dist/` is regenerable.
 - `publish`: the P1 collision is the one retryable error (fresh snapshot +
   recompute per the `Core.Tag` contract); everything else aborts loudly.
-- `promote`/cleanup are single-mutation steps — a failure leaves the previous
-  state (marker unmoved / release intact) and is rerun after diagnosis.
+- `promote`'s flip and the cleanup are single mutations (the manifest upload
+  before the flip is clobber-idempotent) — a failure leaves the previous state
+  (marker unmoved / release intact) and the step is simply rerun.
 - The G8 interlock + explicit `--repo` make "accidentally published to the real
   repo" require two independent mistakes.
 
@@ -242,7 +272,13 @@ cannot fire accidentally).
 - **Umbrella §13:** move to validated — `gh release create` exit behavior (P1/
   P2), aqua `{{.Arch}}`=`arm64` (P7, closes the `Naming` ARCH NOTE canary +
   its `naming_test` comment), `@latest` marker semantics (P8), first-run base
-  case confirmed live (P10).
+  case confirmed live (P10), and the "final aqua extraction layout (the `bin/`
+  move)" line — closed by §4.4 step 2 (check-only; the layout already ships).
+- **Umbrella header + D6:** the "Consumed by: …`djgoku/aqua-registry@feat/…`"
+  line and D6's "existing aqua registry already points here" rationale describe
+  the superseded fork-branch mechanism — update both to the P7 reality (the
+  consumed registry is `aqua/registry.yaml` in this repo via
+  `MISE_AQUA_REGISTRY_URL`; D6's conclusion stands, its rationale changes).
 - **Umbrella §14 Phase-4 row:** DoD met via validated-then-cleaned release (G2);
   first kept release moves to Phase 5's first automated run.
 - **Umbrella §7.2:** note P10 (legacy `latest` carries no `build-manifest.json`
@@ -262,9 +298,13 @@ cannot fire accidentally).
   front-loads Phase-5 adapter design before decide/finalize requirements are
   concrete; more to test with no Phase-4 payoff.
 - **C. Real-repo validation via draft or prerelease.** Rejected: drafts are
-  un-installable (P4 — no tag, invisible); prereleases work by exact tag (P5)
-  but add a state flip for no benefit over `--latest=false` + cleanup (G2),
-  since `@latest` is marker-driven either way (P8).
+  un-installable (P4 — no tag, invisible). Prereleases work by exact tag and
+  would even hide the transient release from `ls-remote` during the validation
+  window (P5) — but the real-repo run's value is **fidelity** (Phase 5 ships
+  normal releases, so validate the normal-release path), and `@latest` is
+  marker-driven either way (P8). We accept the brief public-visibility window:
+  G2 deletes the clearly-dated release after validation, and nothing was ever
+  promised at that tag.
 - **D. Reproducible tarballs now.** Rejected (G4/P11): nothing consumes
   byte-identity; rebuilt Mach-Os differ regardless; xattr-free is the part that
   matters (E7) and is kept.
