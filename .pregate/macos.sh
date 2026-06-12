@@ -7,3 +7,4 @@
 mise run build
 mise run relocate    # mix relocate ends with the static otool gate — fails pregate if not self-contained
 mise run cleanroom   # moves versions/master/.pixi aside, then --batch (+ GUI frame) — the no-pixi proof
+mise run package master pregate-smoke   # Phase 4: layout + packaging self-verify on the just-built app
