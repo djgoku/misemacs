@@ -270,3 +270,77 @@ In subcomponent: …" (regression-tested with a tamper-after-sign tool stub in
 `relocate_test.exs`). Runs at relocation time — before packaging — where the
 xattr-borne signatures (E7) are still intact, so the full deep verify is
 meaningful there and only there.
+
+## 2026-06-11 — Phase 4 (brainstorm): publish mechanics + aqua consumption chain
+
+Environment: gh 2.92.0, mise 2026.6.1, macOS arm64. Lab = throwaway repo
+`djgoku/misemacs-phase4-lab` (real `djgoku/misemacs` only read, never written).
+Generic gh/mise facts with full proofs live in the knowledge base
+(`github-releases.md`, `mise.md`); this section records the project-binding
+results (P-numbers referenced by the Phase 4 design spec).
+
+### 1. `gh release create` collision semantics (closes the §13 open question)
+- Existing **release** → exit 1, stderr `a release with the same tag name
+  already exists: <tag>` (P1; the machine-checkable `.N` retry signal).
+- Existing **tag without a release** (after `gh release delete`, which keeps
+  the tag) → exit 0, the release silently adopts the dangling tag at its old
+  commit (P2). ⇒ the publisher's tag snapshot must be the UNION of git tags and
+  release tag-names, so dangling tags yield `.N+1` instead of adoption.
+- `gh release delete <tag> --yes --cleanup-tag` removes release AND tag in one
+  step, exit 0 (P12) — the validated real-repo cleanup path for G2.
+
+### 2. The Latest marker (the outward-facing trap)
+- Creating a release with NO `--latest` flag **steals the Latest marker**
+  (GitHub `make_latest` defaults true): a dash-tag lab release auto-became
+  Latest over the incumbent (P3). ⇒ `pipeline/publish` always passes
+  `--latest=false`; flipping is `pipeline/promote`'s explicit
+  `gh release edit <tag> --latest` (validated to work, also as the rollback).
+- Drafts create NO git tag (`untagged-…` URL) and are invisible without auth ⇒
+  never aqua/mise-installable (P4; eliminates draft-based E2E). Prereleases
+  create the real tag, are public, never auto-Latest, hidden from
+  `mise ls-remote`, but installable by exact `@tag` (P5).
+- Asset re-upload to a release needs `--clobber` (else exit 1) (P6).
+
+### 3. Consumption chain — how `mise use aqua:djgoku/misemacs@<tag>` resolves
+- Mechanism (from the old-system README, the documented user path):
+  `MISE_AQUA_REGISTRY_URL=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml`
+  — a SINGLE-FILE registry served from the misemacs repo itself (NOT the
+  `djgoku/aqua-registry` fork branch, which is just a PR-shaped copy with
+  identical contract values). Without the env var, `mise ls-remote
+  aqua:djgoku/misemacs` fails: `no aqua-registry found for djgoku/misemacs`
+  (baked registry lacks the package; upstream `pkgs/djgoku` is 404). ⇒ the
+  fresh take MUST carry `aqua/registry.yaml` at the same path or the cutover
+  push breaks every configured install (P7 → spec G5).
+- Full chain validated against the lab registry (fresh `MISE_DATA_DIR` +
+  `MISE_CACHE_DIR` + empty global config): template render → download →
+  extract → contractual layout; **aqua's `{{.Arch}}` token = `arm64`** on
+  darwin/arm64 (closes the Phase-0 `Naming` ARCH-NOTE canary) (P7).
+- **`@latest` = GitHub's latest-release MARKER**, not version sort: with the
+  marker on the dot-tag, `mise latest` returned it; after
+  `gh release edit <dash-tag> --latest`, a fresh-cache resolve returned the
+  dash tag (P8). Dot/dash tags coexist harmlessly (sort order only affects
+  `ls-remote` listing). Gotcha: `MISE_CACHE_DIR` is independent of
+  `MISE_DATA_DIR` — a warm cache serves a stale `latest` within its TTL.
+- **mise 2026.6.1 does NOT verify `SHASUMS256.txt`**: install succeeded with a
+  deliberately corrupted checksum asset; debug shows `using GitHub API digest
+  for checksum verification` (GitHub's per-asset digest) and no SHASUMS fetch
+  (P9). ⇒ `pipeline/package` must self-verify (`shasum -c`); the file remains
+  required by the registry contract (real `aqua` CLI) + as audit artifact.
+- Proven `SHASUMS256.txt` format (the release installed on this machine):
+  `shasum -a 256` output, tarball-only (P14).
+
+### 4. Legacy coexistence on the real repo (read-only survey)
+- Legacy releases are dot-dated (`emacs-master-2026.06.05` = current Latest)
+  with assets `build-manifest.org`, `inputs.sha256`, tarball, `SHASUMS256.txt`
+  — **no `build-manifest.json` anywhere** ⇒ the new system's first run is the
+  designed `first_run` base case (§7.2/§8) against the live repo (P10).
+- The fresh take has NO git remote; remote main still serves the old system.
+  `gh --repo` publishes from anywhere; release-created tags point at the remote
+  default-branch HEAD until the cutover push — cosmetic, the tag is an
+  artifact handle (P13).
+
+### 5. Determinism probe (G4: defer byte-reproducibility)
+Same built tree tarred twice (1.1 s apart, `COPYFILE_DISABLE=1 tar
+--no-xattrs`) → **identical** sha256; recreated tree (fresh mtimes) →
+different sha256 (P11). Bytes are stable per artifact, rebuilds differ anyway
+⇒ reproducible-tar engineering deferred; xattr-free flags kept (E7).
