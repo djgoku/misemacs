@@ -974,6 +974,13 @@ Expected: both lookups print `$LAB_TAG`; the manifest JSON shows `"schema":1` an
 
 Proves the integrated recipe including the new sentinel package step, before touching the real repo. (~20–30 min; the VM builds Emacs from scratch.)
 
+> **Review deviation (2026-06-13):** the first full pregate run surfaced a pre-existing
+> latent bug — `.pregate/common.sh` trusted only the repo-root `mise.toml`, so the fresh-VM
+> build aborted at `pipeline/build-emacs` (`versions/master/mise.toml … not trusted`; the host
+> had it trusted, masking the gap in earlier phases). Fixed in `common.sh` by also trusting
+> each `versions/*/mise.toml` (glob → "add a version = data only" preserved). Disk held at
+> ~94–95 % throughout both VM runs with no tart-clone truncation, clearing the KB caution.
+
 - [ ] **Step 1: Run pregate**
 
 ```bash
