@@ -61,5 +61,9 @@ defmodule Orchestrator.Releases.Gh do
     end
   end
 
-  defp gh(args), do: System.cmd("gh", args, stderr_to_stdout: true)
+  defp gh(args) do
+    System.cmd("gh", args, stderr_to_stdout: true)
+  rescue
+    ErlangError -> {"", 1}
+  end
 end

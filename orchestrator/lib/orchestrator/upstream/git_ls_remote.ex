@@ -9,6 +9,8 @@ defmodule Orchestrator.Upstream.GitLsRemote do
       {out, 0} -> parse(out, ref)
       _ -> nil
     end
+  rescue
+    ErlangError -> nil
   end
 
   @doc "Pure: pick the sha for `ref` from ls-remote stdout (`<sha>\\t<refname>` lines); nil if none."
