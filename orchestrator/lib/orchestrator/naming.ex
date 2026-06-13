@@ -2,17 +2,18 @@ defmodule Orchestrator.Naming do
   @moduledoc """
   SOLE owner of release tag / asset / checksum name strings.
 
-  These MUST match the aqua registry template
-  (djgoku/aqua-registry@feat/djgoku/misemacs):
+  These MUST match the consumed aqua registry template — the vendored
+  `aqua/registry.yaml` in this repo, bound here by `registry_contract_test.exs`
+  (Phase 4, P7/G5; the `djgoku/aqua-registry@feat/...` branch is a PR-shaped copy,
+  not the file `MISE_AQUA_REGISTRY_URL` serves):
 
       misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz   (darwin -> macos, format tar.gz)
 
   where {{.Version}} is the git tag. Any drift here silently breaks `mise use aqua:...`.
 
   ARCH NOTE: the registry has NO arch replacement, so the `arch` passed in MUST equal the
-  token aqua renders for the platform ({{.Arch}}). For darwin/arm64 that is expected to be
-  `arm64`. [OPEN: confirm aqua's default arm64 token via a real `aqua` resolve — a silent
-  arm64->aarch64 normalization would break installs.]
+  token aqua renders for the platform ({{.Arch}}). VALIDATED (Phase 4, P7): a real
+  `mise install` resolved `…-macos-arm64.tar.gz` on darwin/arm64 — aqua renders `arm64`.
   """
 
   @asset_prefix "misemacs"

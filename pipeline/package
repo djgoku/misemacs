@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# pipeline/package <version> <tag> [--upstream-sha <sha>] — turn the relocated+signed
+# build/<version>/Emacs.app into the contractual release artifact (spec §4.4):
+#   dist/<version>/{<asset>, SHASUMS256.txt, upstream-sha.txt}
+# CHECKS the bundle (never mutates — nothing touches it after Phase 2/3 sign+verify),
+# tars WITHOUT xattrs (E7), then SELF-VERIFIES the artifact locally before any gh call.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION="${1:?usage: pipeline/package <version> <tag> [--upstream-sha <sha>]}"
+TAG="${2:?usage: pipeline/package <version> <tag> [--upstream-sha <sha>]}"
+shift 2
+UPSTREAM_SHA=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --upstream-sha) UPSTREAM_SHA="${2:?--upstream-sha needs a value}"; shift 2 ;;
+    *) echo "FATAL: unknown arg $1"; exit 1 ;;
+  esac
+done
+OUT="$HERE/build/$VERSION"; APP="$OUT/Emacs.app"; DIST="$HERE/dist/$VERSION"
+[ -d "$APP" ] || { echo "FATAL: $APP missing — run 'mise run build && mise run relocate' first"; exit 1; }
+
+echo ">> [1] names for tag '$TAG' (given-tag mode — Naming is the sole owner)"
+ASSET=""; STEM=""; CHECKSUMS=""; BINS=()
+while IFS= read -r line; do
+  case "$line" in
+    asset=*)     ASSET="${line#asset=}" ;;
+    stem=*)      STEM="${line#stem=}" ;;
+    checksums=*) CHECKSUMS="${line#checksums=}" ;;
+    bin=*)       BINS+=("${line#bin=}") ;;
+  esac
+done < <(cd "$HERE/orchestrator" && mise exec -- mix release.names --tag "$TAG" --os macos --arch arm64)
+[ -n "$ASSET" ] && [ -n "$STEM" ] && [ -n "$CHECKSUMS" ] && [ "${#BINS[@]}" -ge 4 ] || { echo "FATAL: release.names output incomplete"; exit 1; }
+
+echo ">> [2] layout check (spec §10; check-only, the bundle is sealed)"
+for bin in "${BINS[@]}"; do
+  [ -x "$OUT/$bin" ] || { echo "FATAL: missing/non-executable $bin in $OUT"; exit 1; }
+done
+
+echo ">> [3] upstream sha"
+if [ -z "$UPSTREAM_SHA" ]; then
+  [ -d "$OUT/src/.git" ] || { echo "FATAL: no $OUT/src checkout and no --upstream-sha"; exit 1; }
+  UPSTREAM_SHA="$(git -C "$OUT/src" rev-parse HEAD)"
+fi
+
+echo ">> [4] stage + xattr-free tar (E7 / spec §10)"
+rm -rf "$DIST"; mkdir -p "$DIST/stage/$STEM"
+cp -Rc "$APP" "$DIST/stage/$STEM/Emacs.app" 2>/dev/null \
+  || { rm -rf "$DIST/stage/$STEM/Emacs.app"; cp -Rp "$APP" "$DIST/stage/$STEM/Emacs.app"; }
+(cd "$DIST/stage" && COPYFILE_DISABLE=1 tar --no-xattrs -czf "../$ASSET" "$STEM")
+
+echo ">> [5] checksums ($CHECKSUMS, bare-basename entries)"
+(cd "$DIST" && shasum -a 256 "$ASSET" > "$CHECKSUMS" && shasum -c "$CHECKSUMS")
+
+echo ">> [6] self-verify: tar listing"
+tar -tzf "$DIST/$ASSET" > "$DIST/stage/listing.txt"
+bad="$(grep -v "^$STEM/" "$DIST/stage/listing.txt" || true)"
+[ -z "$bad" ] || { echo "FATAL: entry outside stem dir: $(echo "$bad" | head -1)"; exit 1; }
+for bin in "${BINS[@]}"; do
+  grep -qxF "$STEM/$bin" "$DIST/stage/listing.txt" || { echo "FATAL: $bin missing from tarball"; exit 1; }
+done
+
+echo ">> [7] self-verify: extract transport smoke (E7-correct checks)"
+T="$(mktemp -d)"
+trap 'rm -rf "$T"' EXIT
+tar -xzf "$DIST/$ASSET" -C "$T"
+"$T/$STEM/Emacs.app/Contents/MacOS/Emacs" --batch --eval '(princ (format "ok %s\n" emacs-version))'
+codesign --verify --strict "$T/$STEM/Emacs.app/Contents/Frameworks/libgnutls.30.dylib"
+codesign --verify --strict "$T/$STEM/Emacs.app/Contents/MacOS/bin/emacsclient"
+xcount="$(find "$T" -exec xattr -l {} + 2>/dev/null | grep -c -E 'com\.apple\.(quarantine|cs\.)' || true)"
+[ "$xcount" = "0" ] || { echo "FATAL: $xcount signature/quarantine xattrs survived the tar"; exit 1; }
+rm -rf "$DIST/stage"
+
+printf '%s\n' "$UPSTREAM_SHA" > "$DIST/upstream-sha.txt"
+echo ">> package: PASS — $DIST/$ASSET + $CHECKSUMS (upstream $UPSTREAM_SHA)"

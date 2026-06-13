@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# pipeline/promote --repo <owner/repo> --tag <tag> [--version master] — attach
+# build-manifest.json (idempotent via --clobber, P6) then flip the Latest marker
+# (atomic + reversible, P3). LAB-ONLY in Phase 4 (G2); the real repo's first promote
+# is Phase 5's first kept release. Rerun-safe: just run it again after any failure.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO=""; TAG=""; VERSION="master"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo)    REPO="${2:?}"; shift 2 ;;
+    --tag)     TAG="${2:?}"; shift 2 ;;
+    --version) VERSION="${2:?}"; shift 2 ;;
+    *) echo "FATAL: unknown arg $1"; exit 1 ;;
+  esac
+done
+[ -n "$REPO" ] && [ -n "$TAG" ] || { echo "usage: pipeline/promote --repo <owner/repo> --tag <tag>"; exit 1; }
+if [ "$REPO" = "djgoku/misemacs" ] && [ "${MISEMACS_PUBLISH_OK:-}" != "1" ]; then
+  echo "FATAL: promoting on djgoku/misemacs requires MISEMACS_PUBLISH_OK=1 (G8 interlock)"; exit 1
+fi
+SHA_FILE="$HERE/dist/$VERSION/upstream-sha.txt"
+[ -f "$SHA_FILE" ] || { echo "FATAL: $SHA_FILE missing — run pipeline/package (or publish) first"; exit 1; }
+
+ASSET=""
+while IFS= read -r line; do
+  case "$line" in asset=*) ASSET="${line#asset=}" ;; esac
+done < <(cd "$HERE/orchestrator" && mise exec -- mix release.names --tag "$TAG" --os macos --arch arm64)
+[ -n "$ASSET" ] && [ -f "$HERE/dist/$VERSION/$ASSET" ] || {
+  echo "FATAL: $HERE/dist/$VERSION/$ASSET missing — does --tag match the packaged dist/ artifact?"; exit 1; }
+
+echo ">> [1] build-manifest.json via mix release.manifest (Core.Hash fingerprint)"
+(cd "$HERE/orchestrator" && mise exec -- mix release.manifest \
+  --version "$VERSION" --tag "$TAG" --upstream-sha "$(cat "$SHA_FILE")" \
+  --root "$HERE" --out "$HERE/dist/$VERSION/build-manifest.json")
+
+echo ">> [2] attach manifest (idempotent)"
+gh release upload "$TAG" "$HERE/dist/$VERSION/build-manifest.json" --repo "$REPO" --clobber
+
+echo ">> [3] flip Latest marker to $TAG"
+gh release edit "$TAG" --repo "$REPO" --latest
+
+echo ">> promote: PASS — $TAG is Latest on $REPO and carries build-manifest.json"

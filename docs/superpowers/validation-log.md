@@ -344,3 +344,67 @@ Same built tree tarred twice (1.1 s apart, `COPYFILE_DISABLE=1 tar
 --no-xattrs`) → **identical** sha256; recreated tree (fresh mtimes) →
 different sha256 (P11). Bytes are stable per artifact, rebuilds differ anyway
 ⇒ reproducible-tar engineering deferred; xattr-free flags kept (E7).
+
+## 2026-06-13 — Phase 4 (implementation): lab rehearsal + real-repo E2E (the §14 DoD)
+
+Executed via the subagent-driven plan; the real 150 MB Phase-3 artifact
+(`build/master/Emacs.app`, upstream `8decb65`) reused throughout. Every
+real-repo step has a passing lab twin.
+
+### 1. Lab dress rehearsal (djgoku/misemacs-phase4-lab, public, real artifact)
+- Reset to 0 releases/0 tags; lab `aqua/registry.yaml` set to the 4-file vendored
+  shape (repo_name swapped) via the gh contents API.
+- `mise run publish --repo …-lab` → `emacs-master-2026-06-13` created
+  `--latest=false`; assets = tarball + `SHASUMS256.txt`; package self-verify
+  (layout, `shasum -c`, extract `--batch` `ok 32.0.50`, sentinel codesign,
+  zero `cs.`/quarantine xattrs) all green.
+- **Clean-box VM e2e (pregate `--cmd`, fresh tahoe VM, fresh MISE_DATA/CACHE):**
+  `mise use aqua:djgoku/misemacs-phase4-lab@<tag>` → download/checksum/extract →
+  `E2E-BATCH-OK 32.0.50`, `E2E-GUI-OK`, `E2E-EMBEDDED-SIGS-OK`,
+  `E2E-NO-QUARANTINE`, `e2e: PASS` (`✅ macos`).
+- `mise run promote --repo …-lab --tag <tag>` → `build-manifest.json` attached
+  (schema 1, `Core.Hash` fingerprint `sha256:8f45a68d…`), Latest flipped;
+  fresh-cache `mise latest` resolved `<tag>` (P8).
+
+### 2. The Latest-marker semantics (corrects a plan expectation)
+The plan's Step-3 "expect 404 for `releases/latest` with one `--latest=false`
+release" was WRONG: `GET /releases/latest` falls back to the most-recent
+published release when **none** is flagged `make_latest`, so the sole
+`--latest=false` release is returned. The real safety property is
+**incumbent preservation**, re-confirmed live on the lab: with a release
+explicitly flagged latest, creating a NEWER-dated `--latest=false` release left
+the marker unmoved (matches brainstorm T5). This is the property the real repo
+relies on.
+
+### 3. Real repo (djgoku/misemacs — both gates user-approved; G2 lifecycle)
+- **Gate A → publish:** `MISEMACS_PUBLISH_OK=1 mise run publish --repo
+  djgoku/misemacs` → `emacs-master-2026-06-13` created `--latest=false`
+  (dash tag coexists with the legacy dot-tags). `@latest` stayed
+  `emacs-master-2026.06.05` immediately after.
+- **E2E (the §14 DoD): PASS** — pristine VM, real consumed registry URL
+  (`raw…/djgoku/misemacs/main/aqua/registry.yaml`, the old-system file whose
+  contract is identical, P7): `mise use aqua:djgoku/misemacs@emacs-master-2026-06-13`
+  → `E2E-BATCH-OK 32.0.50`, `E2E-GUI-OK`, `E2E-EMBEDDED-SIGS-OK`,
+  `E2E-NO-QUARANTINE`, `e2e: PASS`. `@latest` unchanged throughout.
+- **Gate B → cleanup:** `gh release delete emacs-master-2026-06-13 --cleanup-tag`
+  → tag count 0, release count 0, `@latest` still `emacs-master-2026.06.05`,
+  release list = legacy only. **Repo byte-identical to its pre-Phase-4 state
+  (G2).** First *kept* release ships with Phase-5 automation.
+
+### 4. Full pregate (fresh macOS VM, integrated recipe)
+- First run FAILED at `pipeline/build-emacs`: `versions/master/mise.toml … not
+  trusted`. Root cause: `.pregate/common.sh` trusted only the repo-root config;
+  the host had the per-version config trusted, masking the gap in earlier
+  phases (so the in-VM build-from-source was never truly exercised before).
+  Fix: `common.sh` now trusts each `versions/*/mise.toml` (glob → "add a version
+  = data only"). Re-run **green**: `Result: 75 passed` → build → relocate →
+  `cleanroom: PASS` → `package master pregate-smoke` PASS against a freshly-built
+  app (`ok 32.0.50`, upstream `4a86a530`). pregate green = CI-green by construction.
+
+### 5. tart disk caution — CLEARED on this host
+Three VM runs (lab e2e + 2 full pregates) at host Data volume **94–95 % full /
+~54 GB free** — squarely in `~/.claude/knowledge-base/tart.md`'s caution band —
+produced **zero** clone truncation or false failure (all clones ran intact;
+build-from-source completed). Empirical evidence the byte-count caution is
+over-conservative when guest writes are flushed (pregate already `sync`s); the
+KB note is being relaxed accordingly.

@@ -3,7 +3,7 @@
 - **Date:** 2026-06-05
 - **Status:** Draft for review
 - **Publishes to:** `djgoku/misemacs` (GitHub Releases)
-- **Consumed by:** existing aqua registry `djgoku/aqua-registry@feat/djgoku/misemacs` → `mise use aqua:...`
+- **Consumed by:** the vendored `aqua/registry.yaml` in this repo, served raw off `main` via `MISE_AQUA_REGISTRY_URL` → `mise use aqua:djgoku/misemacs@<tag>` (validated Phase 4, P7; the `djgoku/aqua-registry@feat/djgoku/misemacs` branch is a PR-shaped copy, not the consumed file)
 
 ## 1. Goal
 
@@ -39,7 +39,7 @@ notarization, per-channel `latest` aliases.
 | D3 | v1 targets | **macOS arm64 only** | Start single, validate end-to-end, extend trivially |
 | D4 | Orchestration brain | **Elixir** (pure decision fns) + **mise** (input locking) + **bash** (glue) | mise has no cross-run memory → wrong tool for change detection; keep its strength, put decisions in testable Elixir |
 | D5 | Signing | **Ad-hoc, signed last** (Developer ID deferred) | **Validated sufficient** (Phase 3, Decision F): the aqua/mise install path is quarantine-free (curl/CLI-tar set no quarantine; real installs verified clean), so Gatekeeper never assesses the bundle; transport-proven in a pristine VM. Developer ID deferred (§15). Relocation invalidates sigs ⇒ sign last regardless |
-| D6 | Release target repo | **`djgoku/misemacs`** | Existing aqua registry already points here; zero registry edits |
+| D6 | Release target repo | **`djgoku/misemacs`** | The consumed registry is aqua/registry.yaml in this repo (P7) — publishing here keeps one repo owning code, registry, and releases |
 | D7 | Reproducibility | **Pixi project** (`pixi.toml` + committed `pixi.lock`) for C libs, activated via `mise-env-pixi` | `pixi.lock` locks the full transitive closure; closes mise/conda's transitive-lock gap |
 | D8 | Dep sourcing order | **mise registry → aqua → pixi/conda** (pixi via the mise pixi plugins, local-first) | Pipeline toolchain via registry/aqua (locked in `mise.lock`); Emacs C libs via the pixi project (locked in `pixi.lock`) |
 
@@ -248,6 +248,8 @@ commit-back loop that races with humans / needs push perms) and needs no externa
    the new `latest` release.
 3. **Self-healing fallback.** If `latest` is missing/corrupt, reconstruct last-state by
    scanning recent releases — each release carries the manifest that produced it.
+   *(Confirmed live, Phase 4 P10: legacy releases carry `build-manifest.org`,
+   never `.json` — so the first automated run is the designed `first_run` case.)*
 
 Assets are immutable per release, so reads are free and side-effect-free.
 
@@ -322,6 +324,11 @@ skip with a warning (never treated as "changed").
 - **Xattrs:** create the tarball **without** macOS xattrs (e.g. `COPYFILE_DISABLE=1 tar --no-xattrs`) —
   the xattr-borne codesign signatures on `Emacs.pdmp`/`rcs2log` don't survive aqua's Go extraction
   anyway (Phase 3, E7), and xattr-free archives are deterministic. (Wire in Phase 4.)
+- **Vendored registry:** the consumed aqua registry is `aqua/registry.yaml` IN THIS
+  REPO (users set `MISE_AQUA_REGISTRY_URL` to its raw-main URL — Phase 4, P7);
+  `registry_contract_test.exs` binds it to `lib/naming`. Note: mise (2026.6.1)
+  verifies GitHub's per-asset API digest, NOT `SHASUMS256.txt` (P9) — the file
+  stays for the aqua contract + audit, and `pipeline/package` self-verifies it.
 - **Internal layout (contractual):** the tarball unpacks to a top dir named exactly
   like the asset stem, containing:
   ```
@@ -421,6 +428,14 @@ rejection of ad-hoc is expected and harmless; GK approval caches by cdhash;
 `--deep` xattr-signs non-Mach-O nested code (`Emacs.pdmp`/`rcs2log`) and tar/Go
 extraction strips those sigs — bundle verify is build-time-only, launch unaffected
 (E1–E7, validation log + KB macos-gatekeeper.md).
+**Phase 4 (publish/consumption, lab-proven P1–P14):** `gh release create` on an
+existing release = exit 1 "already exists" (the `.N` retry signal); on a dangling
+tag = silent adoption (snapshot must union tags ∪ release names); a create
+WITHOUT `--latest=false` steals the Latest marker; drafts are tagless/invisible;
+aqua `{{.Arch}}` = `arm64` (Naming canary closed); `@latest` = the GitHub
+latest-release marker, not version sort; mise does not verify SHASUMS256.txt
+(GitHub API digest instead); legacy releases carry no build-manifest.json ⇒
+first run = `first_run`.
 
 **Open** (resolve during implementation):
 - conda-forge `tree-sitter` provides `libtree-sitter`+headers — **RESOLVED: KEEP**
@@ -429,10 +444,9 @@ extraction strips those sigs — bundle verify is build-time-only, launch unaffe
   since Emacs 30; dep + flag dropped).
 - `mise-backend-pixi`: does `pixi:<tool>` transitively lock via `mise.lock`, and is the
   prefix `pixi:` (install name) vs `vfox-pixi:`? (Phase 0.)
-- Exact `gh release create` exit code on a pre-existing tag (confirm before Phase 4).
 - `--with-ns` Info.plist/icon — **RESOLVED (Phase 2):** the ns build emits a self-contained
-  `nextstep/Emacs.app` with a valid `Info.plist` (deep-signs cleanly). The final aqua extraction layout
-  (the `bin/` move) is Phase 4.
+  `nextstep/Emacs.app` with a valid `Info.plist` (deep-signs cleanly). The aqua extraction layout
+  shipped/checked in Phase 4 (check-only — the build already emits it).
 - `-nw` on ncurses — **DEFERRED:** v1 is GUI-only; ncurses is bundled generically (the dylib resolves),
   and working `-nw` is a post-Phase-4 fast-follow (§15).
 
@@ -446,7 +460,7 @@ Cheap/risky things proven before macOS minutes are spent.
 | **1 Reproducible deps** (local) | per-version pixi PROJECT (`pixi.toml`/`pixi.lock`) via `mise-env-pixi`; `configure`-only run | all deps resolve on osx-arm64 (esp. gnutls closure); **decide tree-sitter in/out** (drop if libtree-sitter isn't clean); configure detects ns/json/xml2/gnutls (+tree-sitter if kept), native-comp off; built Emacs runs `-nw` (throwaway build; ncurses links from pixi → bundled in Phase 2, GUI-only, `-nw` deferred §15); direct-`pixi` fallback verified |
 | **2 Build + relocation** (crux) | bash `build-emacs` + Elixir `Orchestrator.Relocate`/`mix relocate` + `Macho` gate | self-contained `.app` launches with the pixi env moved aside / on a **clean** pregate VM; gate green |
 | **3 Signing** | ad-hoc sign-last | **DONE:** quarantine/Gatekeeper evidence recorded (E1–E7); transport proof in a pristine VM green (runs + embedded sigs; bundle verify build-time-only per E7); `verify_bundle` invariant in `Relocate` + regression test; Decision F (Developer ID deferred with explicit triggers, §15) |
-| **4 Package + publish** | `package` to exact aqua layout + `SHASUMS256.txt`; `publish` (tag/`.N`/latest/manifest) | `mise use aqua:djgoku/misemacs@<tag>` installs & runs end-to-end on a clean box |
+| **4 Package + publish** | `package` to exact aqua layout + `SHASUMS256.txt`; `publish` (tag/`.N`/latest/manifest) | **DONE:** `mise use aqua:djgoku/misemacs@<tag>` installed & ran in a pristine VM via the real registry URL (validation log Phase 4); per G2 the validated release was then removed (`--cleanup-tag`) — the first KEPT release ships with Phase 5 automation; `package`/`publish`/`promote` + `release.names`/`release.manifest` are the Phase-5 primitives |
 | **5 Automate** | decide-gate + daily cron + dynamic matrix + PR dry-run + force-build | run twice/day → 2nd skips; forced change → only that ref; partial-failure releases good cells |
 | **6 Prove "trivial to add"** | add `emacs-30.x` via data only | builds & releases with **zero stage/code change** |
 

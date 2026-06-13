@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# pipeline/publish --repo <owner/repo> [--version master] [--channel <ch>] — compute the
+# next tag (Core.Tag over a FRESH snapshot), package, create the GitHub release.
+# ALWAYS --latest=false (P3/G1: GitHub steals the Latest marker by default; flipping
+# latest is promote's explicit job). Collision (P1) => re-snapshot + recompute + re-package.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO=""; VERSION="master"; CHANNEL=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo)    REPO="${2:?}"; shift 2 ;;
+    --version) VERSION="${2:?}"; shift 2 ;;
+    --channel) CHANNEL="${2:?}"; shift 2 ;;
+    *) echo "FATAL: unknown arg $1"; exit 1 ;;
+  esac
+done
+[ -n "$REPO" ] || { echo "FATAL: --repo is required (G8 — no default repo)"; exit 1; }
+if [ "$REPO" = "djgoku/misemacs" ] && [ "${MISEMACS_PUBLISH_OK:-}" != "1" ]; then
+  echo "FATAL: publishing to djgoku/misemacs requires MISEMACS_PUBLISH_OK=1 (G8 interlock)"; exit 1
+fi
+CHANNEL="${CHANNEL:-$VERSION}"   # v1: channel == version name for master (Manifest invariant)
+DATE="$(date -u +%F)"
+
+snapshot() {  # union of git tags (complete; strips peeled ^{} dups) and release names (draft-held names, P4)
+  # Each source is its own assignment with an EXPLICIT `|| return 1` — NOT relying on set -e.
+  # This function runs inside `snap="$(snapshot)"`, and on bash 3.2 set -e is DISABLED inside
+  # command substitution (no inherit_errexit until bash 4.4). A failed source would otherwise be
+  # masked (the function's status is its last command, `printf|sort`, which always succeeds),
+  # yielding a PARTIAL snapshot that can drop a dangling tag and let `gh release create` silently
+  # ADOPT it (P2) instead of colliding (P1) — a wrong-commit release. `|| return 1` makes the
+  # function exit non-zero on any source failure, so the outer `snap="$(snapshot)"` assignment
+  # (where set -e IS active) aborts publish loudly. Proven on bash 3.2: gitfail/ghfail → exit 1.
+  local _tags _releases
+  _tags="$(git ls-remote --tags "https://github.com/$REPO" | awk '{print $2}' \
+            | sed -e 's|^refs/tags/||' -e 's|\^{}$||')" || return 1
+  _releases="$(gh release list --repo "$REPO" --limit 1000 --json tagName --jq '.[].tagName')" || return 1
+  printf '%s\n%s\n' "$_tags" "$_releases" | sort -u
+}
+
+for attempt in 1 2 3; do
+  echo ">> [attempt $attempt] tag snapshot + names (snapshot mode)"
+  # snapshot() aborts loudly if either source fails (see its comment); cmd-sub here propagates
+  # that. A clean partial snapshot is therefore impossible — no silent P2 dangling-tag adoption.
+  snap="$(snapshot)"
+  TAG=""; ASSET=""; CHECKSUMS=""
+  while IFS= read -r line; do
+    case "$line" in
+      tag=*)       TAG="${line#tag=}" ;;
+      asset=*)     ASSET="${line#asset=}" ;;
+      checksums=*) CHECKSUMS="${line#checksums=}" ;;
+    esac
+  done < <(printf '%s\n' "$snap" | (cd "$HERE/orchestrator" && mise exec -- mix release.names \
+             --channel "$CHANNEL" --date "$DATE" --os macos --arch arm64 --tags-file -))
+  [ -n "$TAG" ] && [ -n "$ASSET" ] && [ -n "$CHECKSUMS" ] || { echo "FATAL: release.names output incomplete"; exit 1; }
+
+  echo ">> package $VERSION as $TAG"
+  bash "$HERE/pipeline/package" "$VERSION" "$TAG"
+  UPSTREAM_SHA="$(cat "$HERE/dist/$VERSION/upstream-sha.txt")"
+
+  echo ">> gh release create $TAG on $REPO (--latest=false, G1)"
+  set +e
+  err="$(gh release create "$TAG" --repo "$REPO" --title "$TAG" --latest=false \
+          --notes "$CHANNEL @ $UPSTREAM_SHA" \
+          "$HERE/dist/$VERSION/$ASSET" "$HERE/dist/$VERSION/$CHECKSUMS" 2>&1)"
+  rc=$?
+  set -e
+  if [ $rc -eq 0 ]; then
+    echo "$err"
+    echo ">> publish: PASS — $TAG on $REPO (not latest; promote is a separate step)"
+    exit 0
+  elif printf '%s' "$err" | grep -q "already exists"; then
+    echo ">> tag collision (P1): $err — recomputing"
+    continue
+  else
+    echo "FATAL: gh release create failed: $err"
+    echo "       (partial release? inspect with: gh release view $TAG --repo $REPO;"
+    echo "        clean up with: gh release delete $TAG --repo $REPO --yes [--cleanup-tag])"
+    exit 1
+  fi
+done
+echo "FATAL: 3 tag collisions in a row — investigate the snapshot"; exit 1

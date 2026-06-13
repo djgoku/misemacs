@@ -518,6 +518,14 @@ git commit -m "feat(phase4): mix release.manifest — schema-1 state manifest vi
 
 ## Task 5: `pipeline/package` + mise task + pregate step
 
+> **Review deviation (2026-06-12):** the as-committed `pipeline/package` differs from the
+> script block below in two reviewed fixes: step [6] greps a listing FILE instead of piping
+> `echo "$listing" | grep -q` (pipefail+SIGPIPE made verdicts tar-entry-order-dependent —
+> proven false-FATAL/missed-detection on the real 413KB listing), and the step-[4] `cp -Rp`
+> fallback now `rm -rf`s the partial clone dest first (nesting hazard) without discarding
+> stderr. Plus: CHECKSUMS in the parse guard, EXIT trap for the extract tmpdir, anchored
+> `/dist/` in .gitignore, `--upstream-sha` in the task description.
+
 **Files:**
 - Create: `pipeline/package`
 - Modify: `mise.toml` (add `[tasks.package]`), `.gitignore` (add `dist/`), `.pregate/macos.sh` (append sentinel package run)
@@ -653,6 +661,14 @@ git commit -m "feat(phase4): pipeline/package — layout check, xattr-free tar, 
 ```
 
 ## Task 6: `pipeline/publish` + `pipeline/promote` + mise tasks
+
+> **Review deviation (2026-06-13):** as-committed `pipeline/publish` materializes the tag
+> snapshot via `snap="$(snapshot)"` (command substitution) before feeding `release.names`,
+> instead of `snapshot | … mix release.names` directly in the process substitution — proc-sub
+> failure is invisible to `set -e`, so a failed `git ls-remote` (partial snapshot) could let
+> `gh release create` silently adopt a dangling tag (P2) and ship a wrong-commit release. The
+> publish completeness guard also checks ASSET+CHECKSUMS, and `pipeline/promote` cross-checks
+> the `--tag` against the packaged `dist/<version>/<asset>` before writing the manifest.
 
 **Files:**
 - Create: `pipeline/publish`, `pipeline/promote`
@@ -929,8 +945,15 @@ gh release view "$(gh release list --repo djgoku/misemacs-phase4-lab --limit 1 -
 gh api repos/djgoku/misemacs-phase4-lab/releases/latest --jq .tag_name 2>&1 || echo "no latest yet — correct (--latest=false on the only release)"
 ```
 
-Expected: `publish: PASS — emacs-master-<today> …`; assets = the ~150 MB tarball + `SHASUMS256.txt`; and **no Latest release exists** (GitHub returns 404 for `releases/latest` when the repo's only release was created `--latest=false`) — that proves G1.
+Expected: `publish: PASS — emacs-master-<today> …`; assets = the ~150 MB tarball + `SHASUMS256.txt`.
 Record `LAB_TAG=emacs-master-<today>` for the next steps.
+
+> **Superseded (see validation log §2, 2026-06-13):** this step originally expected
+> `releases/latest` → 404 "proves G1". That expectation was WRONG — `GET /releases/latest`
+> falls back to the most-recent published release when *none* is flagged `make_latest`, so the
+> sole `--latest=false` release IS returned. The real G1 property is **incumbent preservation**
+> (a newer `--latest=false` release does not steal an existing flagged latest), confirmed live
+> on the lab and on the real repo (`@latest` stayed `emacs-master-2026.06.05` throughout Task 10).
 
 - [ ] **Step 4: VM E2E against the lab (~25 min: VM boot + 150 MB download + checks)**
 
@@ -957,6 +980,13 @@ Expected: both lookups print `$LAB_TAG`; the manifest JSON shows `"schema":1` an
 ## Task 9: Full pregate run (build → relocate → package in one fresh VM)
 
 Proves the integrated recipe including the new sentinel package step, before touching the real repo. (~20–30 min; the VM builds Emacs from scratch.)
+
+> **Review deviation (2026-06-13):** the first full pregate run surfaced a pre-existing
+> latent bug — `.pregate/common.sh` trusted only the repo-root `mise.toml`, so the fresh-VM
+> build aborted at `pipeline/build-emacs` (`versions/master/mise.toml … not trusted`; the host
+> had it trusted, masking the gap in earlier phases). Fixed in `common.sh` by also trusting
+> each `versions/*/mise.toml` (glob → "add a version = data only" preserved). Disk held at
+> ~94–95 % throughout both VM runs with no tart-clone truncation, clearing the KB caution.
 
 - [ ] **Step 1: Run pregate**
 

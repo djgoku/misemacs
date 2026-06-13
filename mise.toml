@@ -37,6 +37,22 @@ description = "Phase 2: bundle + relocate the built Emacs.app into a self-contai
 dir = "orchestrator"
 run = "mix relocate ../build/master/Emacs.app \"$(cat ../build/master/conda-prefix-lib.txt)\""
 
+[tasks.package]
+description = "Phase 4: package build/<v>/Emacs.app into dist/<v>/ (xattr-free tar + SHASUMS256.txt + self-verify); args: <version> <tag> [--upstream-sha <sha>]"
+run = "bash pipeline/package"
+
+[tasks.publish]
+description = "Phase 4: create a GitHub release (--latest=false) with asset+SHASUMS; args: --repo <owner/repo> [--version v]"
+run = "bash pipeline/publish"
+
+[tasks.promote]
+description = "Phase 4: attach build-manifest.json + flip Latest (lab-only until Phase 5); args: --repo <owner/repo> --tag <tag>"
+run = "bash pipeline/promote"
+
+[tasks.e2e]
+description = "Phase 4 DoD: clean pregate-VM install via mise/aqua; args: <owner/repo> <tag> <registry-url>"
+run = "bash scripts/e2e-aqua-install.sh"
+
 # Phase 2 no-pixi proof: move the per-version pixi env aside, then launch the relocated app. If the
 # bundle is truly self-contained it resolves its whole dylib closure from Contents/Frameworks alone.
 # pregate (.pregate/macos.sh) runs this inside its fresh disposable macOS VM; restored via trap.

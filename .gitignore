@@ -3,3 +3,4 @@
 
 # Phase 2 build + relocate output (ephemeral: source checkout, candidate Emacs.app, otool dumps)
 /build/
+/dist/

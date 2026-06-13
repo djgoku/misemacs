@@ -19,8 +19,8 @@ defmodule Orchestrator.NamingTest do
   end
 
   test "arch token passes through verbatim (the registry has NO arch replacement)" do
-    # If aqua ever normalizes arm64->aarch64 this is the canary; the value we emit must
-    # equal aqua's resolved {{.Arch}} (confirm via a real aqua resolve, Phase 0/4).
+    # Validated Phase 4 (P7): aqua's {{.Arch}} on darwin/arm64 IS "arm64" (real install).
+    # This stays as the canary in case aqua ever changes its normalization.
     assert Naming.asset_name(@tag_str, "macos", "arm64") =~ "-arm64.tar.gz"
     assert Naming.asset_name(@tag_str, "macos", "aarch64") =~ "-aarch64.tar.gz"
   end
