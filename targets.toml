@@ -2,5 +2,5 @@
 [targets.macos-arm64]
 os = "macos"          # aqua {{.OS}} after darwin->macos replacement
 arch = "arm64"        # aqua {{.Arch}}
-runner = "macos-14"   # arm64 hosted runner
+runner = "macos-26"   # arm64 hosted runner (bare label = arm64; spec V3)
 enabled = true

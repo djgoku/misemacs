@@ -1,7 +1,7 @@
 [targets.macos-arm64]
 os = "macos"
 arch = "arm64"
-runner = "macos-14"
+runner = "macos-26"
 enabled = true
 
 [targets.linux-arm64]
