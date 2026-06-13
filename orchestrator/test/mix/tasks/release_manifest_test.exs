@@ -35,7 +35,7 @@ defmodule Mix.Tasks.Release.ManifestTest do
         "emacs-master-2026-06-11",
         "--upstream-sha",
         "abc123"
-      ] ++ extra
+      ] ++ ["--clt-fingerprint", "clt-fixture"] ++ extra
 
     capture_io(fn -> Mix.Task.rerun("release.manifest", args) end)
   end
@@ -52,7 +52,8 @@ defmodule Mix.Tasks.Release.ManifestTest do
 
     expected =
       Hash.version_fingerprint(%{
-        toolchain_hash: Hash.toolchain_hash("# repo mise.toml\n", "# repo mise.lock\n"),
+        toolchain_hash:
+          Hash.toolchain_hash("# repo mise.toml\n", "# repo mise.lock\n", "clt-fixture"),
         upstream_sha: "abc123",
         mise_toml: "# v mise\n",
         pixi_toml: "# v pixi\n",

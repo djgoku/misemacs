@@ -15,11 +15,12 @@ defmodule Orchestrator.Core.HashTest do
              "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
   end
 
-  test "toolchain_hash/2 is stable and flips on either input" do
-    h = Hash.toolchain_hash("a", "b")
-    assert h == Hash.toolchain_hash("a", "b")
-    refute h == Hash.toolchain_hash("a", "b2")
-    refute h == Hash.toolchain_hash("a2", "b")
+  test "toolchain_hash/3 is stable and flips on any input incl. clt" do
+    h = Hash.toolchain_hash("a", "b", "c")
+    assert h == Hash.toolchain_hash("a", "b", "c")
+    refute h == Hash.toolchain_hash("a", "b2", "c")
+    refute h == Hash.toolchain_hash("a2", "b", "c")
+    refute h == Hash.toolchain_hash("a", "b", "c2")
   end
 
   test "version_fingerprint is stable for identical inputs" do

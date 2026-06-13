@@ -12,7 +12,14 @@ defmodule Mix.Tasks.Release.Manifest do
   use Mix.Task
   alias Orchestrator.{Core.Hash, Manifest}
 
-  @switches [version: :string, tag: :string, upstream_sha: :string, out: :string, root: :string]
+  @switches [
+    version: :string,
+    tag: :string,
+    upstream_sha: :string,
+    out: :string,
+    root: :string,
+    clt_fingerprint: :string
+  ]
 
   @impl true
   def run(argv) do
@@ -30,12 +37,15 @@ defmodule Mix.Tasks.Release.Manifest do
       |> Manifest.version_input_files()
       |> Enum.map(&File.read!(Path.join(root, &1)))
 
+    clt = opts[:clt_fingerprint] || Orchestrator.Toolchain.Macos.clt_fingerprint()
+
     inputs_hash =
       Hash.version_fingerprint(%{
         toolchain_hash:
           Hash.toolchain_hash(
             File.read!(Path.join(root, "mise.toml")),
-            File.read!(Path.join(root, "mise.lock"))
+            File.read!(Path.join(root, "mise.lock")),
+            clt
           ),
         upstream_sha: sha,
         mise_toml: mise_toml,

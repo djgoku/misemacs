@@ -18,10 +18,10 @@ defmodule Orchestrator.Core.Hash do
     "sha256:" <> (:crypto.hash(:sha256, iodata) |> Base.encode16(case: :lower))
   end
 
-  @doc "Toolchain hash = sha256 of the repo-level mise.toml ⧺ mise.lock (spec §8)."
-  @spec toolchain_hash(iodata(), iodata()) :: String.t()
-  def toolchain_hash(mise_toml, mise_lock) do
-    fingerprint([{"mise_toml", mise_toml}, {"mise_lock", mise_lock}])
+  @doc "Toolchain hash = sha256 of mise.toml ⧺ mise.lock ⧺ CLT/SDK fingerprint (spec §8, Decision E)."
+  @spec toolchain_hash(iodata(), iodata(), iodata()) :: String.t()
+  def toolchain_hash(mise_toml, mise_lock, clt) do
+    fingerprint([{"mise_toml", mise_toml}, {"mise_lock", mise_lock}, {"clt", clt}])
   end
 
   @doc """
