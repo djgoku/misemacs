@@ -1,0 +1,115 @@
+#+TITLE: misemacs
+#+OPTIONS: toc:nil num:nil
+
+Reproducible, self-contained [[https://www.gnu.org/software/emacs/][GNU Emacs]] builds for Apple-Silicon macOS — compiled hermetically from a conda-forge toolchain, packaged as a relocatable =Emacs.app=, and installable with [[https://mise.jdx.dev/][mise]] + [[https://aquaproj.github.io/][aqua]].
+
+misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/emacs=]] on a daily cadence that *only publishes when upstream actually changed*. Adding a new Emacs version is a *data change, never a code change*.
+
+* What you get
+
+- *Self-contained =Emacs.app=* — the whole dylib closure (GnuTLS, libxml2, tree-sitter, …) is bundled under =Contents/Frameworks= and its load paths rewritten to resolve from inside the app. No Homebrew, no pixi, no system libraries needed at runtime; it runs on a clean machine.
+- *Reproducible* — every C dependency is pinned by a committed =pixi.lock= (the full transitive closure from conda-forge); the pipeline toolchain is pinned by =mise.lock=.
+- *GUI (Cocoa/NS) build* with tree-sitter, libxml2, and GnuTLS. JSON is native (no jansson). native-comp is off in v1.
+- *CalVer releases* tagged =emacs-<channel>-YYYY-MM-DD= (e.g. =emacs-master-2026-06-14=, =emacs-31-2026-06-14=), each shipping a =SHASUMS256.txt= and ad-hoc code signatures.
+- On your =PATH= after install: =Emacs=, =emacsclient=, =etags=, =ebrowse=.
+
+*Scope (v1):* macOS =arm64= only, native-comp disabled, ad-hoc signed (not Developer ID / notarized). See the [[docs/superpowers/specs/2026-06-05-bundled-emacs-build-system-design.md][design spec]] §15 for what is designed-for but deferred (native-comp, more arches/OSes, Developer ID, =-nw=).
+
+* Install
+
+misemacs ships its own single-file aqua registry ([[aqua/registry.yaml][=aqua/registry.yaml=]]). Point mise at it, then install:
+
+#+begin_src sh
+export MISE_AQUA_REGISTRY_URL=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml
+
+# the most recent release:
+mise use aqua:djgoku/misemacs@latest
+
+# …or pin a specific dated build:
+mise use aqua:djgoku/misemacs@emacs-master-2026-06-14
+#+end_src
+
+=Emacs= and friends are then on your mise =PATH=:
+
+#+begin_src sh
+mise exec -- Emacs --version
+#+end_src
+
+mise verifies the downloaded asset against GitHub's release digest. (The first release appears once the daily workflow has run — see *How it works* below.)
+
+* How it works
+
+A small *Elixir orchestrator* makes every decision (pure, unit-tested functions), a *bash pipeline* does the heavy lifting, and *mise + pixi* lock every input. GitHub Actions runs it daily behind a cheap change-detection gate, so the expensive macOS build only fires when upstream moved.
+
+#+begin_example
+  decide ─▶ build ─▶ finalize
+    │         │         │
+    │         │         └─ merge manifest fragments, flip "Latest"
+    │         └─ matrix: one cell per (changed version × target):
+    │              build → relocate → package → publish
+    └─ change gate: nothing changed ⇒ publish nothing
+#+end_example
+
+| Stage      | Owner          | What it does                                                                            |
+|------------+----------------+-----------------------------------------------------------------------------------------|
+| =decide=   | Elixir         | Resolve upstream SHAs, diff against the last manifest, emit the dynamic build matrix     |
+| =build=    | bash + pixi    | =./configure= + =make= a GUI Emacs against the locked per-version pixi env               |
+| =relocate= | Elixir         | Bundle the dylib closure, rewrite load paths, ad-hoc sign; gated by an =otool= check     |
+| =package=  | bash           | xattr-free tarball + =SHASUMS256.txt= + self-verify                                      |
+| =publish=  | bash           | Create the GitHub release (asset + checksums)                                           |
+| =finalize= | Elixir + bash  | Merge per-cell manifest fragments, attach =build-manifest.json=, flip the "Latest" marker |
+
+The daily workflow ([[.github/workflows/daily.yml][=.github/workflows/daily.yml=]]) runs on a cron, on =workflow_dispatch= (with an optional =force_version=), and on pull requests touching =versions/= or =*.toml= (as a no-publish dry-run).
+
+* Repository layout
+
+#+begin_example
+misemacs/
+├── versions.toml          # THE manifest: one row per Emacs version (the build list)
+├── targets.toml           # OS × arch matrix (v1: macos-arm64 only)
+├── versions/
+│   ├── master/            # per-version build inputs …
+│   │   ├── mise.toml      #   EMACS_REF + configure flags + pixi-env wiring
+│   │   ├── pixi.toml      #   conda-forge build deps
+│   │   └── pixi.lock      #   full transitive lock (committed)
+│   └── emacs-31/          # … a second version = a copied dir + one toml row
+├── orchestrator/          # Elixir brain: pure decision fns + Mix tasks (ExUnit-tested)
+├── pipeline/              # bash stages: build-emacs, package, publish, promote
+├── scripts/               # configure-check, e2e-aqua-install
+├── aqua/registry.yaml     # the vendored aqua registry users consume
+├── mise.toml              # shared task seam (test/lint/build/decide/finalize/…)
+└── .github/workflows/     # daily.yml (the automation) + orchestrator-ci.yml
+#+end_example
+
+* Adding a build
+
+A "build" is a *version*: one row in =versions.toml= plus a =versions/<name>/= directory holding =mise.toml=, =pixi.toml=, and =pixi.lock=. There is no code to change — the orchestrator and the daily workflow pick it up automatically.
+
+=emacs-31= is a worked example. It was added as exactly:
+
+1. a row in [[versions.toml][=versions.toml=]] (=ref = "emacs-31"=, =channel = "31"= → tag =emacs-31-YYYY-MM-DD=), and
+2. a [[versions/emacs-31/][=versions/emacs-31/=]] directory copied from =master/= with =EMACS_REF= flipped to =emacs-31= — the =pixi.lock= is reused verbatim, since the build dependencies don't depend on the Emacs version.
+
+The layout contract is enforced by the =version_layout_test= (every =versions.toml= row must have its three input files committed), so a malformed addition fails loudly. A fuller step-by-step walkthrough is planned.
+
+* Development
+
+misemacs uses [[https://mise.jdx.dev/][mise]] as the one task runner across local dev, the pregate hooks, and CI:
+
+#+begin_src sh
+mise run test     # orchestrator ExUnit suite (mix test --warnings-as-errors)
+mise run lint     # mix format --check-formatted
+mise run fmt      # mix format
+#+end_src
+
+Heavier build-related tasks (run =mise tasks= for the full list): =build=, =relocate=, =package=, =publish=, =configure-check=, =cleanroom=, =decide=, =finalize=.
+
+Before pushing, the =.pregate/= hooks run the test/lint suite on Linux and a no-pixi cleanroom launch inside a disposable macOS VM. Design specs, per-phase plans, and the validation log live under [[docs/superpowers/][=docs/superpowers/=]].
+
+* Status
+
+Phases 0–5 are complete: orchestrator core, reproducible deps, build + relocation, signing, package + publish, and the daily automation. See the [[docs/superpowers/validation-log.md][validation log]] for the per-phase definition-of-done evidence.
+
+* Upstream & license
+
+Built from [[https://github.com/emacsmirror/emacs][=emacsmirror/emacs=]]. GNU Emacs is free software under the [[https://www.gnu.org/licenses/gpl-3.0.html][GNU GPL v3+]]; misemacs only builds and repackages it, adding nothing to Emacs itself.
