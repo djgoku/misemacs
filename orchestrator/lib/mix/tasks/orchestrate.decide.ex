@@ -1,0 +1,93 @@
+defmodule Mix.Tasks.Orchestrate.Decide do
+  @shortdoc "Emit the dynamic build matrix + gate flags (spec §4.2)"
+  @moduledoc """
+  The decide-gate brain. Modes: `detect` (compare upstream+inputs vs the latest manifest),
+  `force` (one ref), `dry-run` (all enabled, PR). Prints `key=value` lines (matrix JSON, any,
+  dry_run) for `>> "$GITHUB_OUTPUT"`. IO (git ls-remote / gh / clang) is gathered here and
+  handed to the pure `Orchestrator.Orchestrate`.
+
+      mix orchestrate.decide --repo <owner/repo> --date 2026-06-13 --mode detect [--root ..]
+      mix orchestrate.decide --mode force --force-version master --date <d>
+      mix orchestrate.decide --mode dry-run --date <d>
+  """
+  use Mix.Task
+  alias Orchestrator.{Manifest, Orchestrate, Core.Hash}
+
+  @switches [repo: :string, date: :string, mode: :string, force_version: :string, root: :string]
+
+  @impl true
+  def run(argv) do
+    {opts, [], []} = OptionParser.parse(argv, strict: @switches)
+    opts |> Map.new() |> main(default_deps())
+  end
+
+  @doc "exec + emit; `deps` injectable for tests."
+  def main(opts, deps) do
+    out = exec(opts, deps)
+    emit(out)
+    out
+  end
+
+  @doc "Gather IO (detect only) + shape outputs."
+  def exec(opts, deps \\ default_deps()) do
+    root = opts[:root] || ".."
+    date = fetch!(opts, :date)
+    mode = fetch!(opts, :mode)
+    versions = Manifest.versions!(root)
+    {:ok, jobs} = Manifest.load(Path.join(root, "versions.toml"), Path.join(root, "targets.toml"))
+
+    {states, manifest} =
+      if mode == "detect" do
+        clt = deps.toolchain.()
+        {current_states(versions, root, clt, deps.upstream), deps.releases.(fetch!(opts, :repo))}
+      else
+        {%{}, nil}
+      end
+
+    Orchestrate.decide_outputs(mode, versions, jobs, states, manifest, date, opts[:force_version])
+  end
+
+  defp current_states(versions, root, clt, resolve) do
+    toolchain_hash =
+      Hash.toolchain_hash(
+        File.read!(Path.join(root, "mise.toml")),
+        File.read!(Path.join(root, "mise.lock")),
+        clt
+      )
+
+    for v <- versions, into: %{} do
+      [mise_toml, pixi_toml, pixi_lock] =
+        v.name |> Manifest.version_input_files() |> Enum.map(&File.read!(Path.join(root, &1)))
+
+      sha = resolve.(v.ref)
+
+      hash =
+        Hash.version_fingerprint(%{
+          toolchain_hash: toolchain_hash,
+          upstream_sha: sha || "",
+          mise_toml: mise_toml,
+          pixi_toml: pixi_toml,
+          pixi_lock: pixi_lock
+        })
+
+      {v.name, %{upstream_sha: sha, inputs_hash: hash}}
+    end
+  end
+
+  defp emit(%{matrix: matrix, any: any, dry_run: dry_run}) do
+    IO.puts("matrix=#{JSON.encode!(matrix)}")
+    IO.puts("any=#{any}")
+    IO.puts("dry_run=#{dry_run}")
+  end
+
+  def default_deps do
+    %{
+      upstream: &Orchestrator.Upstream.GitLsRemote.resolve/1,
+      releases: &Orchestrator.Releases.Gh.last_manifest/1,
+      toolchain: &Orchestrator.Toolchain.Macos.clt_fingerprint/0
+    }
+  end
+
+  defp fetch!(opts, key),
+    do: opts[key] || Mix.raise("missing --#{key |> Atom.to_string() |> String.replace("_", "-")}")
+end
