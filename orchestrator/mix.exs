@@ -18,6 +18,11 @@ defmodule Orchestrator.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
-    [{:toml, "~> 0.7"}]
+    [
+      {:toml,
+       github: "bitwalker/toml-elixir",
+       ref: "e32c89908205f4f99695796a268e91c44effe397",
+       override: true}
+    ]
   end
 end
