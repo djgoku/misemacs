@@ -46,6 +46,24 @@ defmodule Orchestrator.Core.Decide do
   end
 
   @doc """
+  Force a single version into `build` (reason `:forced`), bypassing detection — the
+  `workflow_dispatch(force_version)` path (spec §4.2). Raises if the version is unknown.
+  `state` is `%{}` (a forced build's cell resolves upstream itself).
+  """
+  @spec force([map()], String.t(), String.t()) :: Plan.t()
+  def force(versions, version_name, date) do
+    v =
+      Enum.find(versions, &(&1.name == version_name)) ||
+        raise ArgumentError, "force_version #{inspect(version_name)} not in versions.toml"
+
+    %Plan{
+      date: date,
+      build: [%{name: v.name, channel: v.channel, reason: :forced, state: %{}}],
+      skip: for(o <- versions, o.name != version_name, do: %{name: o.name, reason: :not_forced})
+    }
+  end
+
+  @doc """
   Join a plan against the full job list (`Orchestrator.Manifest.jobs/2` output) by
   `:name`, yielding the per-cell build matrix (changed versions × their targets). Only
   jobs whose version is in `plan.build` survive; job order is preserved.

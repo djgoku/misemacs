@@ -85,4 +85,20 @@ defmodule Orchestrator.Core.DecideTest do
 
     assert [%{name: "master"}] = Decide.matrix(plan, jobs)
   end
+
+  test "force/3 builds only the named version with reason :forced" do
+    versions = [
+      %{name: "master", channel: "master", ref: "master"},
+      %{name: "emacs-30.2", channel: "30.2", ref: "emacs-30.2"}
+    ]
+
+    plan = Decide.force(versions, "emacs-30.2", "2026-06-13")
+    assert [%{name: "emacs-30.2", channel: "30.2", reason: :forced}] = plan.build
+    assert [%{name: "master", reason: :not_forced}] = plan.skip
+    assert plan.date == "2026-06-13"
+  end
+
+  test "force/3 raises for an unknown version" do
+    assert_raise ArgumentError, fn -> Decide.force(@versions, "nope", "2026-06-13") end
+  end
 end
