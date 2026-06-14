@@ -8,7 +8,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2   # installs the toolchain from mise.toml (cached)
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4   # installs mise; tools installed plain below (avoid auto --locked)
+        with:
+          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
+          install: false
+      - run: mise install   # plain — core:erlang has no lock URL, so `mise install --locked` is unusable
       - run: mise run test   # mix deps.get && mix test --warnings-as-errors (in orchestrator/)
       - run: mise run lint   # mix format --check-formatted

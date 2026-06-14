@@ -27,8 +27,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
+          install: false      # plain `mise install` below — core:erlang has no lock URL, so auto `--locked` aborts
+      - name: install toolchain + orchestrator deps
+        run: |
+          mise install
+          (cd orchestrator && mise exec -- mix deps.get)
       - id: decide
         run: |
           set -euo pipefail
@@ -37,8 +44,11 @@ jobs:
           if   [ "$EVENT" = "pull_request" ]; then set -- --mode dry-run
           elif [ "$EVENT" = "workflow_dispatch" ] && [ -n "$FORCE" ]; then set -- --mode force --force-version "$FORCE"
           else set -- --mode detect; fi
-          mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" \
-            | tee -a "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY"
+          # Only the key=value lines go to $GITHUB_OUTPUT — `mise run decide` also emits
+          # first-run `mix compile` noise on stdout, which would corrupt the output file.
+          mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" | tee /tmp/decide.out
+          grep -E '^(matrix|any|dry_run)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
+          cat /tmp/decide.out >> "$GITHUB_STEP_SUMMARY"
 
   build:
     needs: decide
@@ -56,10 +66,17 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       MISEMACS_PUBLISH_OK: ${{ github.repository == 'djgoku/misemacs' && '1' || '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
+          install: false      # plain `mise install` below — core:erlang has no lock URL, so auto `--locked` aborts
+      - name: install toolchain + orchestrator deps
+        run: |
+          mise install
+          (cd orchestrator && mise exec -- mix deps.get)
       - name: pixi-env cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: versions/${{ matrix.name }}/.pixi
           key: pixi-${{ matrix.target }}-${{ hashFiles(format('versions/{0}/pixi.lock', matrix.name)) }}
@@ -90,7 +107,7 @@ jobs:
             --version "${{ matrix.name }}" --tag "$TAG" --upstream-sha "$SHA" \
             --root .. --out "../dist/${{ matrix.name }}/build-manifest.json")
       - name: upload fragment (real) / tarball (dry-run)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.decide.outputs.dry_run == 'true' && format('dryrun-{0}-{1}', matrix.name, matrix.target) || format('manifest-{0}-{1}', matrix.name, matrix.target) }}
           path: ${{ needs.decide.outputs.dry_run == 'true' && format('dist/{0}/*.tar.gz', matrix.name) || format('dist/{0}/build-manifest.json', matrix.name) }}
@@ -109,9 +126,16 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       MISEMACS_PUBLISH_OK: ${{ github.repository == 'djgoku/misemacs' && '1' || '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
+          install: false      # plain `mise install` below — core:erlang has no lock URL, so auto `--locked` aborts
+      - name: install toolchain + orchestrator deps
+        run: |
+          mise install
+          (cd orchestrator && mise exec -- mix deps.get)
+      - uses: actions/download-artifact@v8
         with:
           path: fragments
           pattern: manifest-*
