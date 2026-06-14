@@ -29,13 +29,12 @@ description = "Phase 1: fetch Emacs + ./configure against the per-version pixi e
 run = "bash scripts/configure-check.sh master"
 
 [tasks.build]
-description = "Phase 2: build a relocatable-candidate GUI Emacs.app from the per-version pixi env"
-run = "bash pipeline/build-emacs master"
+description = "Phase 2: build a relocatable-candidate GUI Emacs.app from the per-version pixi env; args: [version] (default master)"
+run = "bash pipeline/build-emacs"
 
 [tasks.relocate]
-description = "Phase 2: bundle + relocate the built Emacs.app into a self-contained app (Elixir; otool gate)"
-dir = "orchestrator"
-run = "mix relocate ../build/master/Emacs.app \"$(cat ../build/master/conda-prefix-lib.txt)\""
+description = "Phase 2: bundle + relocate the built Emacs.app into a self-contained app (Elixir; otool gate); args: [version] (default master)"
+run = "bash pipeline/relocate"
 
 [tasks.package]
 description = "Phase 4: package build/<v>/Emacs.app into dist/<v>/ (xattr-free tar + SHASUMS256.txt + self-verify); args: <version> <tag> [--upstream-sha <sha>]"

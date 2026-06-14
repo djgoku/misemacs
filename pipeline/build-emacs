@@ -44,4 +44,4 @@ while IFS= read -r f; do
   { echo "-- $f"; otool -L "$f" | sed -n '2,$p'; } >> "$OUT/otool-prereloc.txt"
 done < <(find "$OUT/Emacs.app" -type f)
 sed -i '' "s|$HOME|~|g" "$OUT/otool-prereloc.txt" 2>/dev/null || true
-echo ">> build-emacs: $OUT/Emacs.app ready (run 'mise run relocate' next)"
+echo ">> build-emacs: $OUT/Emacs.app ready (run 'mise run relocate $VERSION' next)"

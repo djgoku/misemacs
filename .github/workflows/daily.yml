@@ -84,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           mise run build "${{ matrix.name }}"
-          mise run relocate
+          mise run relocate "${{ matrix.name }}"
       - name: publish (real) or package+artifact (dry-run)
         run: |
           set -euo pipefail

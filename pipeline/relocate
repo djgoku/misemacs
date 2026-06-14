@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# pipeline/relocate <version> — bundle + relocate build/<version>/Emacs.app into a
+# self-contained app via the Elixir relocator (`mix relocate`: dylib bundling + install_name
+# rewrite + ad-hoc sign, gated by the otool self-containment check). Mirrors
+# `pipeline/build-emacs <version>`; reads build/<version>/ from the working tree. Default: master.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION="${1:-master}"
+APP="$HERE/build/$VERSION/Emacs.app"
+LIB="$HERE/build/$VERSION/conda-prefix-lib.txt"
+[ -d "$APP" ] || { echo "FATAL: $APP missing — run 'mise run build $VERSION' first"; exit 1; }
+[ -f "$LIB" ] || { echo "FATAL: $LIB missing — run 'mise run build $VERSION' first"; exit 1; }
+# mix relocate must run inside the orchestrator mix project; keep paths relative to it
+# (matches the long-validated master invocation, now version-parameterized).
+cd "$HERE/orchestrator"
+mise exec -- mix relocate "../build/$VERSION/Emacs.app" "$(cat "../build/$VERSION/conda-prefix-lib.txt")"
