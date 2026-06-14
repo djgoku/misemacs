@@ -87,4 +87,31 @@ defmodule Orchestrator.ManifestTest do
 
     assert Enum.any?(jobs, &(&1.name == "master" and &1.target == "macos-arm64"))
   end
+
+  test "versions!/1 reads the [%{name,channel,ref}] list from versions.toml under root" do
+    vs = Manifest.versions!(@fixtures)
+    assert %{name: "master", channel: "master", ref: "master"} in vs
+    assert Enum.any?(vs, &(&1.name == "emacs-30.2" and &1.channel == "30.2"))
+  end
+
+  test "merge/2 with nil prior starts from the fragments (first run)" do
+    frag = %{"schema" => 1, "versions" => %{"master" => %{"released_tag" => "t1"}}}
+    assert Manifest.merge(nil, [frag]) ==
+             %{"schema" => 1, "versions" => %{"master" => %{"released_tag" => "t1"}}}
+  end
+
+  test "merge/2 adds new version entries to the prior, fragments winning" do
+    prior = %{"schema" => 1, "versions" => %{
+      "master" => %{"released_tag" => "old"},
+      "emacs-30.2" => %{"released_tag" => "keep"}
+    }}
+    merged = Manifest.merge(prior, [%{"versions" => %{"master" => %{"released_tag" => "new"}}}])
+    assert merged["versions"]["master"]["released_tag"] == "new"
+    assert merged["versions"]["emacs-30.2"]["released_tag"] == "keep"
+  end
+
+  test "merge/2 with no fragments preserves the prior versions" do
+    prior = %{"schema" => 1, "versions" => %{"master" => %{"released_tag" => "t"}}}
+    assert Manifest.merge(prior, []) == prior
+  end
 end

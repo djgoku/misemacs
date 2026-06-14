@@ -78,4 +78,34 @@ defmodule Orchestrator.Manifest do
         not File.exists?(Path.join(repo_root, rel)),
         do: rel
   end
+
+  @doc """
+  The `[%{name, channel, ref}]` version list (for `Core.Decide.plan/4`) parsed from
+  `versions.toml` under `root`. Distinct from `jobs/2`, which crosses in targets.
+  """
+  @spec versions!(Path.t()) :: [%{name: String.t(), channel: String.t(), ref: String.t()}]
+  def versions!(root) do
+    {:ok, map} = Toml.decode(File.read!(Path.join(root, "versions.toml")))
+
+    for {name, v} <- Map.get(map, "versions", %{}) do
+      %{name: name, channel: v["channel"], ref: v["ref"]}
+    end
+    |> Enum.sort_by(& &1.name)
+  end
+
+  @doc """
+  Merge per-cell single-version fragments into the prior `latest` manifest (spec §4.4).
+  Fragment version entries win; `prior` nil ⇒ start empty (first run). Always schema 1.
+  """
+  @spec merge(map() | nil, [map()]) :: map()
+  def merge(prior, fragments) do
+    base = (prior && Map.get(prior, "versions", %{})) || %{}
+
+    merged =
+      Enum.reduce(fragments, base, fn frag, acc ->
+        Map.merge(acc, Map.get(frag, "versions", %{}))
+      end)
+
+    %{"schema" => 1, "versions" => merged}
+  end
 end
