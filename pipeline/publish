@@ -66,6 +66,7 @@ for attempt in 1 2 3; do
   set -e
   if [ $rc -eq 0 ]; then
     echo "$err"
+    printf '%s\n' "$TAG" > "$HERE/dist/$VERSION/published-tag.txt"
     echo ">> publish: PASS — $TAG on $REPO (not latest; promote is a separate step)"
     exit 0
   elif printf '%s' "$err" | grep -q "already exists"; then
