@@ -1,0 +1,19 @@
+[workspace]
+authors = ["Jonathan Carroll Otsuka <105506+djgoku@users.noreply.github.com>"]
+channels = ["conda-forge"]
+name = "emacs-31"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+autoconf = ">=2.72,<3"
+automake = ">=1.17,<2"
+pkg-config = ">=0.29.2,<0.30"
+texinfo = ">=7.2,<8"
+gnutls = ">=3.8.13,<4"
+# Pinned <2.14: conda libxml2 2.14+ ships runtime-only (no headers/.pc); 2.13.x bundles
+# libxml-2.0.pc + headers so Emacs's pkg-config check uses THIS libxml2, not system. (Phase 1, V6)
+libxml2 = "<2.14"
+libtree-sitter = ">=0.26.9,<0.27"

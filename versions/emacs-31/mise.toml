@@ -1,0 +1,12 @@
+# Per-version build env for emacs-31. Adding a version = copy this dir + a versions.toml row.
+[env]
+EMACS_REF = "emacs-31"   # git ref in emacsmirror/emacs (the emacs-31 release branch)
+
+# native-comp OFF (v1, no libgccjit); JSON is native on this branch (built-in parser, no jansson).
+# ncurses links from the pixi env (texinfo pulls it); GUI-only v1 bundles it generically during
+# relocation, no terminfo work. emacs -nw is a post-Phase-4 fast-follow (spec §15).
+EMACS_CONFIGURE_FLAGS = "--with-ns --without-native-compilation --with-tree-sitter --with-xml2 --with-gnutls"
+
+# Activate the locked pixi build env (mise-env-pixi plugin): puts pkg-config / autoconf /
+# automake / makeinfo on PATH and exposes the gnutls/libxml2/tree-sitter libs+headers.
+_.pixi-env = { tools = true, manifest_path = "./pixi.toml" }

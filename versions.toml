@@ -3,3 +3,7 @@
 [versions.master]
 ref = "master"        # git ref in emacsmirror/emacs
 channel = "master"    # used in the tag: emacs-master-YYYY-MM-DD
+
+[versions.emacs-31]
+ref = "emacs-31"      # the emacs-31 release branch in emacsmirror/emacs
+channel = "31"        # used in the tag: emacs-31-YYYY-MM-DD
