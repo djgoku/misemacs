@@ -77,3 +77,13 @@ else
 fi
 echo ">> cleanroom: PASS — relocated app runs with no pixi env present"
 '''
+
+[tasks.decide]
+description = "Phase 5: emit the dynamic build matrix + gate flags; args: --repo <owner/repo> --date <YYYY-MM-DD> --mode <detect|force|dry-run> [--force-version <name>]"
+dir = "orchestrator"
+run = "mix orchestrate.decide"
+
+[tasks.finalize]
+description = "Phase 5: merge per-cell manifest fragments + pick latest; args: --repo <owner/repo> --fragments <dir> --out <path>"
+dir = "orchestrator"
+run = "mix orchestrate.finalize"
