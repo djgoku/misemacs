@@ -18,7 +18,9 @@ done
 if [ "$REPO" = "djgoku/misemacs" ] && [ "${MISEMACS_PUBLISH_OK:-}" != "1" ]; then
   echo "FATAL: publishing to djgoku/misemacs requires MISEMACS_PUBLISH_OK=1 (G8 interlock)"; exit 1
 fi
-CHANNEL="${CHANNEL:-$VERSION}"   # v1: channel == version name for master (Manifest invariant)
+CHANNEL="${CHANNEL:-$VERSION}"   # fallback ONLY valid when name==channel (master); other versions
+                                 # MUST pass --channel (the matrix carries it) or the tag doubles
+                                 # (e.g. version emacs-31 / channel 31 -> emacs-emacs-31-DATE). v1.
 DATE="$(date -u +%F)"
 
 snapshot() {  # union of git tags (complete; strips peeled ^{} dups) and release names (draft-held names, P4)

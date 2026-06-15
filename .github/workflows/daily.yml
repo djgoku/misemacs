@@ -95,7 +95,7 @@ jobs:
               | sed -n 's/^tag=//p')"
             mise run package "${{ matrix.name }}" "$TAG"
           else
-            mise run publish -- --repo "${{ github.repository }}" --version "${{ matrix.name }}"
+            mise run publish -- --repo "${{ github.repository }}" --version "${{ matrix.name }}" --channel "${{ matrix.channel }}"
           fi
       - name: manifest fragment (real only)
         if: needs.decide.outputs.dry_run != 'true'
