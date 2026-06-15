@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# pipeline/promote --repo <owner/repo> --tag <tag> [--version master] — attach
-# build-manifest.json (idempotent via --clobber, P6) then flip the Latest marker
+# pipeline/promote --repo <owner/repo> --tag <tag> [--version master] [--attach "t1 t2 …"] —
+# attach build-manifest.json (idempotent via --clobber, P6) to <tag> AND each --attach tag,
+# then flip the Latest marker
 # (atomic + reversible, P3). LAB-ONLY in Phase 4 (G2); the real repo's first promote
 # is Phase 5's first kept release. Rerun-safe: just run it again after any failure.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO=""; TAG=""; VERSION="master"; MANIFEST=""
+REPO=""; TAG=""; VERSION="master"; MANIFEST=""; ATTACH=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo)     REPO="${2:?}"; shift 2 ;;
     --tag)      TAG="${2:?}"; shift 2 ;;
     --version)  VERSION="${2:?}"; shift 2 ;;
     --manifest) MANIFEST="${2:?}"; shift 2 ;;
+    --attach)   ATTACH="${2:?}"; shift 2 ;;   # extra built tags to also carry the manifest (space-sep)
     *) echo "FATAL: unknown arg $1"; exit 1 ;;
   esac
 done
@@ -47,7 +49,15 @@ fi
 echo ">> [2] attach manifest (idempotent)"
 gh release upload "$TAG" "$MANIFEST_PATH" --repo "$REPO" --clobber
 
+# Attach the SAME merged manifest to every other built release so each one self-describes the
+# full state (not just Latest). --clobber = idempotent/rerun-safe; skip $TAG (already done).
+for t in $ATTACH; do
+  [ "$t" = "$TAG" ] && continue
+  echo ">> [2b] attach manifest to $t"
+  gh release upload "$t" "$MANIFEST_PATH" --repo "$REPO" --clobber
+done
+
 echo ">> [3] flip Latest marker to $TAG"
 gh release edit "$TAG" --repo "$REPO" --latest
 
-echo ">> promote: PASS — $TAG is Latest on $REPO and carries build-manifest.json"
+echo ">> promote: PASS — $TAG is Latest on $REPO; manifest attached${ATTACH:+ to every built release}"

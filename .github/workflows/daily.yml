@@ -139,14 +139,16 @@ jobs:
         with:
           path: fragments
           pattern: manifest-*
-      - name: finalize (merge + attach + flip)
+      - name: finalize (merge + attach-all + flip)
         run: |
           set -euo pipefail
-          LATEST_TAG="$(mise run finalize -- \
+          FIN="$(mise run finalize -- \
             --repo "${{ github.repository }}" \
             --fragments "$GITHUB_WORKSPACE/fragments" \
-            --out "$GITHUB_WORKSPACE/dist/build-manifest.json" \
-            | sed -n 's/^latest_tag=//p')"
+            --out "$GITHUB_WORKSPACE/dist/build-manifest.json")"
+          LATEST_TAG="$(printf '%s\n' "$FIN" | sed -n 's/^latest_tag=//p')"
+          BUILT_TAGS="$(printf '%s\n' "$FIN" | sed -n 's/^built_tags=//p')"
           if [ -z "$LATEST_TAG" ]; then echo "nothing to finalize (no fragments)"; exit 0; fi
           bash pipeline/promote --repo "${{ github.repository }}" --tag "$LATEST_TAG" \
-            --manifest "$GITHUB_WORKSPACE/dist/build-manifest.json"
+            --manifest "$GITHUB_WORKSPACE/dist/build-manifest.json" \
+            --attach "$BUILT_TAGS"

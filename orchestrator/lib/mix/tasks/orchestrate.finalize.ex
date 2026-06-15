@@ -4,7 +4,9 @@ defmodule Mix.Tasks.Orchestrate.Finalize do
   Reads this run's `manifest-*` fragments (a dir of single-version build-manifest.json),
   merges them into the prior `latest` manifest (`Releases`), writes the merged
   `build-manifest.json` to `--out`, and prints `latest_tag=<tag>` (empty ⇒ nothing to
-  finalize, no flip). The bash `pipeline/promote --manifest` then attaches + flips.
+  finalize, no flip) and `built_tags=<space-separated>` (every released tag this run). The
+  bash `pipeline/promote --manifest --attach "$built_tags"` then attaches the merged manifest
+  to EVERY built release and flips Latest to `latest_tag`.
 
       mix orchestrate.finalize --repo <owner/repo> --fragments <dir> --out <path>
   """
@@ -29,7 +31,8 @@ defmodule Mix.Tasks.Orchestrate.Finalize do
   def exec(opts, deps \\ default_deps()) do
     fragments = read_fragments(opts[:fragments] || ".")
     prior = deps.releases.(opts[:repo])
-    Orchestrate.finalize_outputs(prior, fragments, built_tags(fragments))
+    tags = built_tags(fragments)
+    Orchestrate.finalize_outputs(prior, fragments, tags) |> Map.put(:built_tags, tags)
   end
 
   defp read_fragments(dir) do
@@ -44,10 +47,13 @@ defmodule Mix.Tasks.Orchestrate.Finalize do
     for f <- fragments, {_v, e} <- Map.get(f, "versions", %{}), do: e["released_tag"]
   end
 
-  defp emit(%{manifest: manifest, latest_tag: tag}, out) do
+  defp emit(%{manifest: manifest, latest_tag: tag, built_tags: tags}, out) do
     File.mkdir_p!(Path.dirname(out))
     File.write!(out, JSON.encode!(manifest) <> "\n")
     IO.puts("latest_tag=#{tag || ""}")
+    # Every released tag this run, so the finalize job attaches the merged manifest to EACH
+    # release (self-describing), not just Latest. promote consumes this via --attach.
+    IO.puts("built_tags=#{tags |> Enum.reject(&is_nil/1) |> Enum.join(" ")}")
   end
 
   def default_deps, do: %{releases: &Orchestrator.Releases.Gh.last_manifest/1}
