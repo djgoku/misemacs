@@ -17,16 +17,16 @@ misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/
 
 * Install
 
-misemacs ships its own single-file aqua registry ([[aqua/registry.yaml][=aqua/registry.yaml=]]). Point mise at it, then install:
+misemacs ships its own single-file aqua registry ([[aqua/registry.yaml][=aqua/registry.yaml=]]) with *one package per channel* — =djgoku/misemacs-emacs-master= and =djgoku/misemacs-emacs-31=. Point mise at it, then install the channel you want:
 
 #+begin_src sh
 export MISE_AQUA_REGISTRY_URL=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml
 
-# the most recent release:
-mise use aqua:djgoku/misemacs@latest
+# the most recent master build (swap in -emacs-31 for the Emacs 31 line):
+mise use aqua:djgoku/misemacs-emacs-master@latest
 
-# …or pin a specific dated build:
-mise use aqua:djgoku/misemacs@emacs-master-2026-06-14
+# …or pin a specific dated build (the version is the date; the channel is the package):
+mise use aqua:djgoku/misemacs-emacs-master@2026-06-14
 #+end_src
 
 =Emacs= and friends are then on your mise =PATH=:

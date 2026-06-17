@@ -64,8 +64,20 @@ defmodule Orchestrator.RegistryContractTest do
              "registry is missing files src for #{bin}"
     end
 
+    # One package per channel, each repeating the full src set — count packages by
+    # their version_prefix line so the reverse guard scales. (Phase 6: generate the
+    # registry from versions.toml; until then this binds the hand-maintained file.)
+    n_packages = length(Regex.scan(~r/^\s+version_prefix:/m, reg))
+
     # Reverse guard: a src entry NOT owned by Naming.bundle_binaries/0 fails too.
-    assert length(Regex.scan(~r/src: "/, reg)) == length(Naming.bundle_binaries())
+    assert length(Regex.scan(~r/src: "/, reg)) == length(Naming.bundle_binaries()) * n_packages
+  end
+
+  test "one version_prefix package per channel (name + prefix bound)", %{registry: reg} do
+    for channel <- ["master", "31"] do
+      assert reg =~ "name: djgoku/misemacs-emacs-#{channel}"
+      assert reg =~ ~s(version_prefix: "emacs-#{channel}-")
+    end
   end
 
   test "supported env is darwin/arm64 only", %{registry: reg} do

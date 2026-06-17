@@ -1,9 +1,45 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/registry.json
+# One package per channel (Phase 5, hand-maintained). The version-prefix strips the
+# `emacs-<channel>-` tag prefix so each package's versions are bare CalVer dates
+# (e.g. 2026-06-14) that `mise use @latest` / `mise up` roll within that channel —
+# the literal word "master" otherwise breaks `@<channel>` resolution. {{.Version}} in
+# `asset:` stays the FULL git tag, so the asset template is unchanged from v1.
+# Phase 6: GENERATE this file from versions.toml (one package per channel) so adding
+# a channel stays data-only.
 packages:
   - type: github_release
+    name: djgoku/misemacs-emacs-master
     repo_owner: djgoku
     repo_name: misemacs
-    description: Hermetically-built relocatable Emacs.app for macOS, via mise + conda-forge
+    description: Hermetically-built relocatable Emacs.app for macOS — master channel
+    version_prefix: "emacs-master-"
+    asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
+    format: tar.gz
+    checksum:
+      type: github_release
+      asset: SHASUMS256.txt
+      algorithm: sha256
+    supported_envs:
+      - darwin/arm64
+    overrides:
+      - goos: darwin
+        files:
+          - name: emacs
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/Emacs"
+          - name: emacsclient
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/emacsclient"
+          - name: etags
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/etags"
+          - name: ebrowse
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/ebrowse"
+    replacements:
+      darwin: macos
+  - type: github_release
+    name: djgoku/misemacs-emacs-31
+    repo_owner: djgoku
+    repo_name: misemacs
+    description: Hermetically-built relocatable Emacs.app for macOS — emacs-31 channel
+    version_prefix: "emacs-31-"
     asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
     format: tar.gz
     checksum:
