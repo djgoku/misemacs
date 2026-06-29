@@ -21,6 +21,12 @@ done
 if [ "$REPO" = "djgoku/misemacs" ] && [ "${MISEMACS_PUBLISH_OK:-}" != "1" ]; then
   echo "FATAL: promoting on djgoku/misemacs requires MISEMACS_PUBLISH_OK=1 (G8 interlock)"; exit 1
 fi
+# Derive channel from the tag (emacs-<channel>-YYYY-MM-DD[.N]) and assert the repo.
+CH="$(printf '%s' "$TAG" | sed -E 's/^emacs-(.+)-[0-9]{4}-[0-9]{2}-[0-9]{2}(\.[0-9]+)?$/\1/')"
+EXPECTED_REPO="${MISEMACS_ARTIFACT_BASE:-djgoku/misemacs}-emacs-$CH"
+if [ "$CH" = "$TAG" ] || [ "$REPO" != "$EXPECTED_REPO" ]; then
+  echo "FATAL: promote --repo '$REPO' / --tag '$TAG' — expected repo '$EXPECTED_REPO' (channel '$CH')"; exit 1
+fi
 if [ -n "$MANIFEST" ]; then
   # Phase-5 finalize path: caller supplies the merged manifest; the release + assets already
   # exist on GitHub (published by the build cell — possibly a different runner), so NO local
