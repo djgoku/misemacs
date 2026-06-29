@@ -1,5 +1,6 @@
 defmodule Orchestrator.RelocateTest do
   use ExUnit.Case, async: false
+  import ExUnit.CaptureIO
   @moduletag :macos
 
   # Simulates a post-sign bundle mutation: signs for real, then tampers a sealed
@@ -33,18 +34,22 @@ defmodule Orchestrator.RelocateTest do
   # fake dep to Frameworks. The test asserts Frameworks is empty, proving machos/2 skipped
   # the enchant file (it was rejected before macho? was called). For non-enchant paths,
   # macho?/1 returns false so they don't trigger any copy either.
+  #
+  # The enchant prefix is set at test runtime via Process.put(:recording_tool_enchant_prefix, ...)
+  # so the match is anchored to the specific app path under test (no cross-app risk).
   defmodule RecordingTool do
     @behaviour Orchestrator.Macho.Tool
-    @enchant_prefix "Contents/Resources/enchant/"
+
+    defp enchant_prefix, do: Process.get(:recording_tool_enchant_prefix)
 
     def macho?(p) do
-      String.contains?(p, @enchant_prefix)
+      String.starts_with?(p, enchant_prefix())
     end
 
     # For an enchant file, return a fake bundleable dep (a non-existent @rpath ref) so that
     # copy_closure would try to resolve and copy it if machos/2 had passed the file through.
     def deps(p) do
-      if String.contains?(p, @enchant_prefix),
+      if String.starts_with?(p, enchant_prefix()),
         do: ["@rpath/libenchant_test_sentinel.dylib"],
         else: []
     end
@@ -294,8 +299,13 @@ defmodule Orchestrator.RelocateTest do
     File.write!(Path.join(t, "ench_dep.c"), "int ench_dep(void){return 1;}\n")
     File.write!(Path.join(t, "ench.c"), "int ench_dep(void); int e(void){return ench_dep();}\n")
 
-    # Build the enchant dep dylib and place it ONLY in ench_lib (simulates staged sub-prefix;
-    # nothing in buildlib or the main app references it, so the Frameworks walk cannot pull it)
+    # Build the enchant dep dylib and place it in BOTH ench_lib AND buildlib.
+    # ench_lib placement: required by the enchant gate's self-containment check.
+    # buildlib placement: makes the refute discriminating — without the machos/2 exclusion,
+    # the Frameworks walk would scan libench.dylib (in the enchant subtree), resolve
+    # @rpath/libenchdep.dylib from buildlib, and copy it into Contents/Frameworks. With
+    # the exclusion in place, the enchant subtree is skipped entirely, so libenchdep
+    # is never pulled into Frameworks regardless of buildlib having a copy.
     clang!([
       "-dynamiclib",
       "-install_name",
@@ -305,6 +315,8 @@ defmodule Orchestrator.RelocateTest do
       "-o",
       Path.join(ench_lib, "libenchdep.dylib")
     ])
+
+    File.cp!(Path.join(ench_lib, "libenchdep.dylib"), Path.join(lib, "libenchdep.dylib"))
 
     # Build the enchant dylib linking against the dep, with id/rpath already normalised to
     # the ench_lib location (simulates post-stage_copy state, ready for relocation)
@@ -384,7 +396,12 @@ defmodule Orchestrator.RelocateTest do
       </plist>
       """)
 
-      Orchestrator.Relocate.run(app, lib, RecordingTool)
+      # Anchor the RecordingTool match to THIS app's enchant prefix (no cross-app smell).
+      Process.put(:recording_tool_enchant_prefix, ench_lib <> "/")
+
+      # RecordingTool drives the enchant gate to failure (sentinel dep is absent from ench_lib),
+      # which prints enchant_gate: FAIL + a WARN. Capture to keep suite output pristine.
+      capture_io(fn -> Orchestrator.Relocate.run(app, lib, RecordingTool) end)
 
       fw = Path.join([app, "Contents", "Frameworks"])
 
