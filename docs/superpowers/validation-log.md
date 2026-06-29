@@ -478,3 +478,63 @@ green but lab-validated on hex `0.7.0`, and that ref does NOT clear the type war
 branch. Remaining = the user's: a signed cutover push of `phase-5-automate` → `djgoku/misemacs` `main`
 (cron activates by construction), then delete the lab. A few branch commits are unsigned (re-signed at
 the cutover squash/merge).
+
+## 2026-06-28 — Bundled enchant payload (spec 2026-06-25, plan 2026-06-28; branch enchant-task6)
+
+Spec: `docs/superpowers/specs/2026-06-25-bundled-enchant-payload-design.md`. All claims below were
+verified empirically on macOS arm64 against the **real git-source-built feedstock enchant 2.8.2**
+(not synthetic fixtures), staged via `Orchestrator.Payload.Enchant` into a mock bundle, then probed
+with the conda env **moved aside** (cleanroom = no system/build enchant present).
+
+### 1. Phase 0 — git-source via pixi-build (supersedes "publish to a channel")
+`enchant = { git = "https://github.com/djgoku/enchant-feedstock", branch = "misemacs-recipe",
+subdirectory = "recipe" }` + `[workspace] preview = ["pixi-build"]` → `pixi install` **builds** the
+real feedstock enchant (the `pixi-build-rattler-build` backend, on conda-forge). Produces both
+providers (`lib/enchant-2/enchant_{applespell,hunspell}.so`) + the `dladdr` self-relocation
+constructor; `enchant-lsmod-2` lists both. `pixi.lock` pins the git commit (`2de3177…`). No
+anaconda/prefix.dev account. Both `versions/{master,emacs-31}/pixi.lock` re-locked to that commit.
+
+### 2. Findings 1 & 2 — root cause (the handoff's Finding-2 hypothesis was WRONG)
+- The reported `enchant-2 -l -d en_US` **SEGFAULT** and `enchant_broker_dict_exists("en_US")=0` are
+  **one bug**: `stage_copy` dropped the feedstock's `share/enchant-2/AppleSpell.config` (applespell's
+  locale map). Without it applespell claims no locale → `dict_exists=0` → enchant falls back to the
+  bare language tag `en` → flaky **upstream applespell NULL-deref**. lldb (cleanroom): `enchant_dict_finalize`
+  (`x0=NULL`, `ldr [x0,#0x60]`) ← `enchant_dict_unref` ← `enchant_broker_new_dict` ←
+  `appleSpell_provider_request_dict(tag="en")` @ `providers/applespell_checker.mm:304` ← `main`. So
+  the crash is in **applespell** (tried first per ordering), NOT the dict-less hunspell fallback.
+  Memory-safety / heap-state-dependent: pristine source env `-d en` returned exit 139 then exit 1.
+- **Fix (verified, real artifact, cleanroom):** `stage_copy` now copies `AppleSpell.config` →
+  `dict_exists("en_US")=1`, `request_dict` succeeds, `check("helllo")=1`, `-a` suggests
+  (`& helllo 2 0: hello, he'll`); en_GB also works; `enchant-2 -l -d en_US` exits 0 (no crash).
+  *Residual:* the bare-`en` upstream crash stays latent (only if a caller requests `en` with no
+  region) — recommend a feedstock patch to `applespell_checker.mm` as a follow-up; region tags safe.
+- **Decision C → applespell default, zero bundled dictionaries; hunspell is bring-your-own.** The
+  AppleSpell.config fix (above) makes applespell check + suggest `en_US`/`en_GB` with no dict files,
+  so the default path needs nothing extra. We evaluated bundling a permissive **SCOWL/LibreOffice
+  `en_US` hunspell dict** but **decided against it** — applespell covers the default and a ~50k-line
+  `.dic` adds license-tracking + repo/diff bloat for the secondary path. The hunspell provider still
+  ships; a user enables it by dropping their own `en_US.aff`/`.dic` into `~/.config/enchant/hunspell/`
+  (the per-user dir the provider searches: `g_get_system_data_dirs()/hunspell` +
+  `~/.config/enchant/hunspell` — **not** the enchant prefix, since dladdr does not reach dict lookup).
+  No global env mutation (O5); BYO activation is documented in the README.
+
+### 3. Finding — build-prefix `leak_check` DROPPED
+`verify/3`'s `strings`-grep for the conda prefix false-flagged 6 legitimately-relocated dylibs
+(libenchant, providers, glib/gio/intl) — real conda dylibs bake the install prefix into **inert
+data-section strings** `install_name_tool` cannot strip. The macho self-containment gate (load
+commands) + per-file `codesign --verify --strict` + the functional cleanroom run are the real proof;
+`dladdr` overrides any compiled-in prefix at runtime. Removed from `verify/3` (and the cleanroom
+`strings|grep` step is NOT added). Confirmed: staged real enchant now passes `verify/3` (`:ok`).
+
+### 4. O-items resolved
+- **O2 — pkg-config shim chosen** (not bundling real `pkgconf`): the shim is minimal, fully controls
+  flags incl. `-Wl,-rpath`, refuses non-`enchant-2` queries (exits non-zero), and is `exec-path`-scoped
+  to jinx's compile by `site-start.el` — never shadows a real system `pkg-config`. The real
+  `${pcfiledir}`-relative `.pc` still ships for non-jinx consumers.
+- **O5 — `site-start.el` keeps auto-load** but is discovery-only: no `DYLD_*`, no policy
+  (`ispell-program-name` untouched); its only effect is `with-eval-after-load 'jinx` advice. Opt out
+  with `(setq misemacs-enchant-disable t)` or `emacs -Q` / `--no-site-file`.
+- **O6 — resolved** (applespell checks+suggests en_US/en_GB once `AppleSpell.config` staged); hunspell
+  is bring-your-own (no bundled dict).
+- **O8 — confirmed:** the built env's `share/enchant-2/enchant.ordering` is the ordering path (our
+  staged `*:applespell,hunspell` overrides the feedstock default `*:hunspell,nuspell,aspell`).
