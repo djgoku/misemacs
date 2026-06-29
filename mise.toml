@@ -36,6 +36,10 @@ run = "bash pipeline/build-emacs"
 description = "Phase 2: bundle + relocate the built Emacs.app into a self-contained app (Elixir; otool gate); args: [version] (default master)"
 run = "bash pipeline/relocate"
 
+[tasks.stage-enchant]
+description = "Phase 2: copy the bundled enchant payload into the built Emacs.app (run AFTER build, BEFORE relocate); args: [version] (default master)"
+run = "bash pipeline/stage-enchant"
+
 [tasks.package]
 description = "Phase 4: package build/<v>/Emacs.app into dist/<v>/ (xattr-free tar + SHASUMS256.txt + self-verify); args: <version> <tag> [--upstream-sha <sha>]"
 run = "bash pipeline/package"
@@ -73,6 +77,39 @@ if "$APP/Contents/MacOS/Emacs" -Q --eval '(run-with-timer 1 nil (lambda () (kill
   echo "   GUI frame OK"
 else
   echo "   GUI frame skipped (no display/session — --batch is the hard gate)"
+fi
+ENCH="$APP/Contents/Resources/enchant"
+if [ -d "$ENCH" ]; then
+  echo ">> [3] enchant resolves providers from the bundle alone (dladdr self-relocation, no pixi env)"
+  "$ENCH/bin/enchant-lsmod-2"                       # lists applespell (+ hunspell) from the bundle (O6)
+  echo ">> [4] applespell default: enchant-2 -l -d en_US must NOT crash (needs staged AppleSpell.config)"
+  printf 'helllo\n' | "$ENCH/bin/enchant-2" -l -d en_US >/dev/null   # set -e/pipefail fail the gate on the old SEGFAULT
+  echo "   enchant-2 -d en_US OK"
+  echo ">> [5] hunspell option: bundled en_US dict spell-checks via XDG_DATA_DIRS (no system enchant)"
+  hs="$(printf 'teh\n' | env XDG_DATA_DIRS="$ENCH/share" ENCHANT_ORDERING='*:hunspell' "$ENCH/bin/enchant-2" -l -d en_US)"
+  [ "$hs" = "teh" ] || { echo "FATAL: bundled hunspell en_US dict not working (got '$hs')"; exit 1; }
+  echo "   hunspell en_US OK"
+  echo ">> [6] symlinked-launch (O9): dladdr resolves providers under a symlink"
+  LN="$(mktemp -d)/Emacs.app"; ln -s "$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")" "$LN"   # absolute target
+  "$LN/Contents/Resources/enchant/bin/enchant-lsmod-2" >/dev/null \
+    || { echo "FATAL: providers do not resolve under a symlinked launch (O9)"; exit 1; }
+  echo "   symlinked launch OK"
+  echo ">> [7] jinx end-to-end (best-effort: needs network for ELPA + Xcode CLT)"
+  if "$APP/Contents/MacOS/Emacs" -Q --batch \
+       --eval "(progn (setq package-user-dir (make-temp-file \"elpa\" t))
+                      (require 'package)
+                      (add-to-list 'package-archives '(\"gnu\" . \"https://elpa.gnu.org/packages/\"))
+                      (add-to-list 'package-archives '(\"nongnu\" . \"https://elpa.nongnu.org/nongnu/\"))
+                      (package-initialize) (package-refresh-contents)
+                      (package-install 'jinx)
+                      (load (expand-file-name \"Contents/Resources/site-lisp/site-start.el\" \"$APP\"))
+                      (require 'jinx)
+                      (unless (fboundp 'jinx--load-module) (error \"O4: jinx--load-module missing — re-confirm advice target\"))
+                      (with-temp-buffer (jinx-mode 1) (insert \"helllo\") (jinx--load-module) (message \"jinx ok\")))" 2>/dev/null; then
+    echo "   jinx e2e OK (module compiled via bundled shim, no system pkg-config)"
+  else
+    echo "   jinx e2e skipped (no network/CLT — providers [3] + en_US [4] are the hard enchant gates)"
+  fi
 fi
 echo ">> cleanroom: PASS — relocated app runs with no pixi env present"
 '''

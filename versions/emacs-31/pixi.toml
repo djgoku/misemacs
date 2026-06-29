@@ -4,6 +4,8 @@ channels = ["conda-forge"]
 name = "emacs-31"
 platforms = ["osx-arm64"]
 version = "0.1.0"
+# pixi-build: lets `enchant` (below) build from the feedstock git branch — no channel publish.
+preview = ["pixi-build"]
 
 [tasks]
 
@@ -17,3 +19,7 @@ gnutls = ">=3.8.13,<4"
 # libxml-2.0.pc + headers so Emacs's pkg-config check uses THIS libxml2, not system. (Phase 1, V6)
 libxml2 = "<2.14"
 libtree-sitter = ">=0.26.9,<0.27"
+# Bundled-enchant payload (spec docs/superpowers/specs/2026-06-25-bundled-enchant-payload-design.md).
+# Built from the feedstock git branch via pixi-build (Phase 0 = git-source; pixi.lock pins the commit).
+# Inert in the build env — Emacs never links it; pipeline/stage-enchant copies it from $CONDA_PREFIX.
+enchant = { git = "https://github.com/djgoku/enchant-feedstock", branch = "misemacs-recipe", subdirectory = "recipe" }
