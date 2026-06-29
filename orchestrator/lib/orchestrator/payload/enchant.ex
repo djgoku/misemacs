@@ -6,7 +6,8 @@ defmodule Orchestrator.Payload.Enchant do
   `<prefix>/lib/libenchant-2.2.dylib` + `<prefix>/lib/enchant-2/` (design §5.1/§7).
 
   Pure here: the exact bytes of the four generated files. The copy/relocate/sign IO is the
-  `stage/3` + `verify/2` runner (reuses `Orchestrator.Macho`, IO via `Orchestrator.Macho.Tool`).
+  `stage_copy/3` → `relocate/2` → `verify/3` runner (reuses `Orchestrator.Macho`, IO via
+  `Orchestrator.Macho.Tool`).
   """
   alias Orchestrator.Macho
 
@@ -98,7 +99,184 @@ defmodule Orchestrator.Payload.Enchant do
   @spec ordering_contents() :: String.t()
   def ordering_contents, do: "*:applespell,hunspell\n"
 
-  # IO runner (stage/3, verify/2) is added in Task 3.
-  @doc false
-  def __macho__, do: Macho
+  # --- IO runner (Task 3): stage_copy → relocate → verify, bundle-root = enchant/lib ---
+
+  @spec ench_dir(Path.t()) :: Path.t()
+  defp ench_dir(app), do: Path.join(Path.expand(app), @enchant_rel)
+
+  @doc "Copy enchant + its closure out of `conda_prefix` into the app sub-prefix (no relocation yet)."
+  @spec stage_copy(Path.t(), Path.t(), module) :: :ok
+  def stage_copy(app, conda_prefix, tool \\ Orchestrator.Macho.Otool) do
+    ench = ench_dir(app)
+    lib = Path.join(ench, "lib")
+    File.mkdir_p!(Path.join(lib, "enchant-2"))
+    File.mkdir_p!(Path.join(ench, "include/enchant-2"))
+    File.mkdir_p!(Path.join(ench, "lib/pkgconfig"))
+    File.mkdir_p!(Path.join(ench, "share/enchant-2"))
+    File.mkdir_p!(Path.join(ench, "bin"))
+    File.mkdir_p!(Path.join(app, "Contents/Resources/site-lisp"))
+    src = fn rel -> Path.join(conda_prefix, rel) end
+
+    # 1. libenchant + the providers are the relocation ROOTS; copy them in...
+    cp!(src.("lib/libenchant-2.2.dylib"), Path.join(lib, "libenchant-2.2.dylib"))
+    # spike-A: -lenchant-2 target. Idempotent: drop any prior link before recreating.
+    _ = File.rm(Path.join(lib, "libenchant-2.dylib"))
+    File.ln_s!("libenchant-2.2.dylib", Path.join(lib, "libenchant-2.dylib"))
+
+    for so <- Path.wildcard(Path.join(src.("lib/enchant-2"), "enchant_*.so")) do
+      cp!(so, Path.join([lib, "enchant-2", Path.basename(so)]))
+    end
+
+    # 2. ...then BFS their foreign closure into enchant/lib (Macho primitives, bundle-root = lib).
+    roots = [
+      Path.join(lib, "libenchant-2.2.dylib") | Path.wildcard(Path.join(lib, "enchant-2/*.so"))
+    ]
+
+    copy_closure(roots, lib, Path.join(conda_prefix, "lib"), tool)
+
+    # 3. SDK + CLIs + generated files. (R3: CLIs must be executable — cp_exec!, not cp!.)
+    for h <- Path.wildcard(Path.join(src.("include/enchant-2"), "*.h")) do
+      cp!(h, Path.join([ench, "include/enchant-2", Path.basename(h)]))
+    end
+
+    for b <- ["enchant-2", "enchant-lsmod-2"], File.exists?(src.("bin/#{b}")) do
+      cp_exec!(src.("bin/#{b}"), Path.join([ench, "bin", b]))
+    end
+
+    File.write!(Path.join(ench, "lib/pkgconfig/enchant-2.pc"), pc_contents())
+    write_exec!(Path.join(ench, "bin/pkg-config"), pkgconfig_shim())
+    File.write!(Path.join(ench, "share/enchant-2/enchant.ordering"), ordering_contents())
+    File.write!(Path.join(app, "Contents/Resources/site-lisp/site-start.el"), site_start_el())
+    :ok
+  end
+
+  @doc "Normalize ids/deps/rpaths within the staged sub-prefix to @rpath/@loader_path, then per-file sign."
+  @spec relocate(Path.t(), module) :: :ok
+  def relocate(app, tool \\ Orchestrator.Macho.Otool) do
+    ench = ench_dir(app)
+    lib = Path.join(ench, "lib")
+
+    for m <- machos(ench, tool) do
+      # R2: providers are MH_BUNDLE and the CLIs are executables — neither carries an id.
+      # `install_name_tool -id` (asserted exit 0 by Otool.set_id) errors on a non-dylib; guard it.
+      if tool.id(m), do: tool.set_id(m, "@rpath/" <> Path.basename(m))
+
+      for dep <- tool.deps(m), Macho.classify(dep) == :foreign do
+        base = Path.basename(dep)
+        if File.exists?(Path.join(lib, base)), do: tool.change(m, dep, "@rpath/" <> base)
+      end
+
+      tool.add_rpath(m, "@loader_path/" <> Macho.relpath(lib, Path.dirname(m)))
+      for rp <- tool.rpaths(m), Macho.classify(rp) == :foreign, do: tool.delete_rpath(m, rp)
+      tool.sign_file(m)
+    end
+
+    :ok
+  end
+
+  @doc "Gate: otool self-containment over enchant/** + per-file codesign verify + build-prefix leak check."
+  @spec verify(Path.t(), Path.t(), module) :: :ok | {:error, term}
+  def verify(app, conda_prefix, tool \\ Orchestrator.Macho.Otool) do
+    ench = ench_dir(app)
+    lib = Path.join(ench, "lib")
+    basenames = lib |> File.ls!() |> MapSet.new()
+
+    machos =
+      for m <- machos(ench, tool), do: %{path: m, deps: tool.deps(m), rpaths: tool.rpaths(m)}
+
+    with [] <- Macho.gate_violations(machos, basenames),
+         :ok <- verify_sigs(machos, tool),
+         :ok <- leak_check(ench, conda_prefix) do
+      IO.puts("enchant_gate: PASS (#{ench} self-contained)")
+      :ok
+    else
+      {:error, _} = e ->
+        e
+
+      violations ->
+        Enum.each(violations, &IO.puts("  VIOLATION #{inspect(&1)}"))
+        IO.puts("enchant_gate: FAIL")
+        {:error, violations}
+    end
+  end
+
+  # --- helpers (mirror Orchestrator.Relocate's closure walk, bundle-root = enchant/lib) ---
+
+  # R4: skip symlinks. `File.regular?/1` follows links — it would re-resolve the unversioned
+  # `libenchant-2.dylib` link to the versioned dylib and double-edit it. `File.lstat/1` does not.
+  defp machos(ench, tool) do
+    Path.join(ench, "**")
+    |> Path.wildcard()
+    |> Enum.filter(fn p ->
+      match?({:ok, %File.Stat{type: :regular}}, File.lstat(p))
+    end)
+    |> Enum.filter(&tool.macho?/1)
+  end
+
+  defp copy_closure(roots, lib, conda_lib, tool) do
+    queue = Enum.flat_map(roots, fn f -> Macho.bundleable(tool.deps(f)) end)
+    do_copy(queue, MapSet.new(), lib, conda_lib, tool)
+  end
+
+  defp do_copy([], _seen, _lib, _src, _tool), do: :ok
+
+  defp do_copy([dep | rest], seen, lib, src, tool) do
+    base = Path.basename(dep)
+
+    if MapSet.member?(seen, base) do
+      do_copy(rest, seen, lib, src, tool)
+    else
+      from = resolve(dep, src)
+      dest = Path.join(lib, base)
+
+      new =
+        if (from && File.exists?(from)) and not File.exists?(dest) do
+          cp!(from, dest)
+          Macho.bundleable(tool.deps(dest))
+        else
+          []
+        end
+
+      do_copy(rest ++ new, MapSet.put(seen, base), lib, src, tool)
+    end
+  end
+
+  defp resolve("@rpath/" <> base, src), do: Path.join(src, base)
+  defp resolve("/" <> _ = abs, _src), do: abs
+  defp resolve(_, _), do: nil
+
+  defp verify_sigs(machos, tool) do
+    Enum.reduce_while(machos, :ok, fn %{path: p}, _ ->
+      case tool.verify_file(p) do
+        :ok -> {:cont, :ok}
+        {:error, m} -> {:halt, {:error, {:unsigned, p, m}}}
+      end
+    end)
+  end
+
+  defp leak_check(ench, conda_prefix) do
+    hits =
+      Path.join(ench, "**")
+      |> Path.wildcard()
+      |> Enum.filter(fn p -> match?({:ok, %File.Stat{type: :regular}}, File.lstat(p)) end)
+      |> Enum.filter(fn f -> :binary.match(File.read!(f), conda_prefix) != :nomatch end)
+
+    if hits == [], do: :ok, else: {:error, {:build_prefix_leak, hits}}
+  end
+
+  defp cp!(from, to) do
+    File.cp!(from, to)
+    File.chmod!(to, 0o644)
+  end
+
+  # R3: enchant-2 / enchant-lsmod-2 are executables; pipeline/package's `-x` check needs 0755.
+  defp cp_exec!(from, to) do
+    File.cp!(from, to)
+    File.chmod!(to, 0o755)
+  end
+
+  defp write_exec!(path, body) do
+    File.write!(path, body)
+    File.chmod!(path, 0o755)
+  end
 end
