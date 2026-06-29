@@ -260,9 +260,15 @@ per-channel repos:
 - The "master is the sole Latest-eligible channel" framing → moot; every repo has its own Latest.
 
 The `registry_contract_test` is **kept and updated** to assert `version_source: github_tag` *and*
-the per-channel `repo_owner`/`repo_name`. If the marker spec was partially implemented on this
-branch, only the master-only `Core.Latest`/guard parts are reworked; the `github_tag` registry
-change stays.
+the per-channel `repo_owner`/`repo_name`.
+
+**Nothing to revert (verified 2026-06-29).** The marker spec is **docs-only** — no code landed on
+`enchant-task6`: no `version_source`/`github_tag` in `aqua/`, `Core.Latest` still uses the
+original `List.last(built_tags)`, `promote` has only the plain `gh release edit --latest` (no
+non-master guard), and the only marker commit is the design doc `14824c1`. So implementation
+starts from the current (pre-marker) code: this design **adds** `github_tag` to the registry and
+**writes** the per-channel latest selector fresh. The marker spec + plan docs are marked
+*superseded by this design* (header note) so they are not implemented separately.
 
 ### 4.10 Adding a new version (e.g. `emacs-30`), end to end
 

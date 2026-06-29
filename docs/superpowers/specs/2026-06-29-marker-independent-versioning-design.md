@@ -1,6 +1,13 @@
 # Design — marker-independent per-channel versioning + master-only Latest
 
-*2026-06-29. Branch: `enchant-task6`. Status: design approved; ready for implementation plan.*
+> **SUPERSEDED (2026-06-29) by [`2026-06-29-per-channel-artifact-repos-design.md`](2026-06-29-per-channel-artifact-repos-design.md).**
+> Do **not** implement this doc separately. The successor **keeps** the `version_source:
+> github_tag` change (it provides per-channel marker-independence) but **drops** the master-only
+> `Core.Latest` rewrite and the `promote` non-master guard — per-channel artifact repos remove the
+> cross-channel Latest contention those parts addressed. None of this doc was ever implemented in
+> code (docs-only), so there is nothing to revert; the successor builds from current code.
+
+*2026-06-29. Branch: `enchant-task6`. Status: SUPERSEDED — see note above.*
 
 ## 1. Problem
 
