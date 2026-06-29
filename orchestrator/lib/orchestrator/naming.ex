@@ -24,6 +24,14 @@ defmodule Orchestrator.Naming do
   @spec tag_base(String.t(), String.t()) :: String.t()
   def tag_base(channel, date), do: "emacs-#{channel}-#{date}"
 
+  @doc """
+  Artifact repo for a channel: `<base>-emacs-<channel>` (e.g.
+  `djgoku/misemacs-emacs-master`). `base` is the source-repo-shaped prefix; the lab
+  passes its own (`djgoku/misemacs-lab`). SOLE owner of the channel→repo convention.
+  """
+  @spec artifact_repo(String.t(), String.t()) :: String.t()
+  def artifact_repo(base, channel), do: "#{base}-emacs-#{channel}"
+
   @doc "Release asset filename for a tag/os/arch."
   @spec asset_name(String.t(), String.t(), String.t()) :: String.t()
   def asset_name(tag, os, arch), do: "#{asset_stem(tag, os, arch)}.#{@format}"
