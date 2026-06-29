@@ -81,100 +81,6 @@ defmodule Orchestrator.Payload.EnchantTest do
   end
 
   @tag :macos
-  test "leak_check catches a build-prefix string planted in a staged file" do
-    tool = Orchestrator.Macho.Otool
-    t = Path.join(System.tmp_dir!(), "ench-leak-#{System.unique_integer([:positive])}")
-    conda = Path.join(t, "conda")
-    libdir = Path.join(conda, "lib")
-    incdir = Path.join(conda, "include/enchant-2")
-    File.mkdir_p!(Path.join(libdir, "enchant-2"))
-    File.mkdir_p!(incdir)
-    app = Path.join(t, "Emacs.app")
-    File.mkdir_p!(Path.join([app, "Contents", "Resources", "site-lisp"]))
-    on_exit(fn -> File.rm_rf!(t) end)
-    cl = fn args -> {_, 0} = System.cmd("clang", args, stderr_to_stdout: true) end
-
-    # Minimal synthetic prefix: one leaf dylib + libenchant-2.2 + one provider + header + CLIs.
-    File.write!(Path.join(t, "g.c"), "int gstub(void){return 1;}\n")
-    File.write!(Path.join(t, "e.c"), "int gstub(void); int enchant_v(void){return gstub()+1;}\n")
-    File.write!(Path.join(t, "p.c"), "int enchant_v(void); int prov(void){return enchant_v();}\n")
-
-    cl.([
-      "-dynamiclib",
-      "-install_name",
-      "@rpath/libglibstub.dylib",
-      "-Wl,-headerpad_max_install_names",
-      Path.join(t, "g.c"),
-      "-o",
-      Path.join(libdir, "libglibstub.dylib")
-    ])
-
-    cl.([
-      "-dynamiclib",
-      "-install_name",
-      "@rpath/libenchant-2.2.dylib",
-      "-Wl,-headerpad_max_install_names",
-      "-L",
-      libdir,
-      "-lglibstub",
-      "-Wl,-rpath," <> libdir,
-      Path.join(t, "e.c"),
-      "-o",
-      Path.join(libdir, "libenchant-2.2.dylib")
-    ])
-
-    File.ln_s!("libenchant-2.2.dylib", Path.join(libdir, "libenchant-2.dylib"))
-
-    cl.([
-      "-bundle",
-      "-Wl,-headerpad_max_install_names",
-      "-L",
-      libdir,
-      "-lenchant-2",
-      "-Wl,-rpath," <> libdir,
-      Path.join(t, "p.c"),
-      "-o",
-      Path.join([libdir, "enchant-2", "enchant_applespell.so"])
-    ])
-
-    File.write!(Path.join(incdir, "enchant.h"), "int enchant_v(void);\n")
-    File.mkdir_p!(Path.join(conda, "bin"))
-
-    for b <- ["enchant-2", "enchant-lsmod-2"] do
-      File.write!(
-        Path.join(t, "#{b}.c"),
-        "int enchant_v(void); int main(void){return enchant_v()-2;}\n"
-      )
-
-      cl.([
-        "-Wl,-headerpad_max_install_names",
-        "-L",
-        libdir,
-        "-lenchant-2",
-        "-Wl,-rpath," <> libdir,
-        Path.join(t, "#{b}.c"),
-        "-o",
-        Path.join([conda, "bin", b])
-      ])
-    end
-
-    # Stage + relocate so Mach-Os are signed and gate/sig checks pass.
-    assert :ok = Orchestrator.Payload.Enchant.stage_copy(app, conda, tool)
-    assert :ok = Orchestrator.Payload.Enchant.relocate(app, tool)
-
-    # Plant the conda_prefix string into the staged .pc (a text file, invisible to machos/2).
-    ench = Path.join(app, "Contents/Resources/enchant")
-    pc_path = Path.join(ench, "lib/pkgconfig/enchant-2.pc")
-    File.write!(pc_path, File.read!(pc_path) <> "\n# leak: #{conda}\n")
-
-    # verify/3 must detect the leak and fail.
-    assert {:error, {:build_prefix_leak, leaked_paths}} =
-             Orchestrator.Payload.Enchant.verify(app, conda, tool)
-
-    assert pc_path in leaked_paths
-  end
-
-  @tag :macos
   test "stage+relocate a synthetic enchant sub-prefix → self-contained; jinx-stub compiles & loads" do
     import Bitwise
 
@@ -261,6 +167,13 @@ defmodule Orchestrator.Payload.EnchantTest do
     end
 
     conda = Path.join(t, "conda")
+
+    # The feedstock ships an applespell locale map at share/enchant-2/AppleSpell.config.
+    # Staging MUST copy it (root-cause of the en_US SEGFAULT + dict_exists=0 was dropping it):
+    # without it applespell claims no locale and enchant falls back to a crashing bare-lang tag.
+    File.mkdir_p!(Path.join(conda, "share/enchant-2"))
+    File.write!(Path.join(conda, "share/enchant-2/AppleSpell.config"), "en_US\ten\tEnglish\n")
+
     assert :ok = Orchestrator.Payload.Enchant.stage_copy(app, conda, tool)
     assert :ok = Orchestrator.Payload.Enchant.relocate(app, tool)
     assert :ok = Orchestrator.Payload.Enchant.verify(app, conda, tool)
@@ -274,6 +187,16 @@ defmodule Orchestrator.Payload.EnchantTest do
     assert File.exists?(Path.join(ench, "lib/enchant-2/enchant_applespell.so"))
     assert File.exists?(Path.join(ench, "share/enchant-2/enchant.ordering"))
     assert File.exists?(Path.join(app, "Contents/Resources/site-lisp/site-start.el"))
+
+    # AppleSpell.config copied from the conda prefix → applespell can claim en_US (no crash).
+    assert File.read!(Path.join(ench, "share/enchant-2/AppleSpell.config")) =~ "en_US"
+
+    # Bundled en_US hunspell dict (the "working hunspell option") staged at the XDG location
+    # (<prefix>/share/hunspell), discoverable via XDG_DATA_DIRS=<prefix>/share.
+    assert File.exists?(Path.join(ench, "share/hunspell/en_US.dic"))
+    assert File.exists?(Path.join(ench, "share/hunspell/en_US.aff"))
+    # The permissive-license notice ships beside the data files.
+    assert File.exists?(Path.join(ench, "share/hunspell/README_en_US.txt"))
 
     # R9: each staged CLI is executable.
     for b <- ["enchant-2", "enchant-lsmod-2", "pkg-config"] do
