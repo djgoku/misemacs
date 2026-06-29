@@ -33,8 +33,11 @@ checksum = "sha256:eb04bbe0748cfc1414081a005c711a102d0b3f551ff96cc8cff81b0e7d468
 url = "https://builds.hex.pm/builds/elixir/v1.20.0-otp-29.zip"
 
 [[tools.erlang]]
-version = "29.0.1"
+version = "29.0.2"
 backend = "core:erlang"
+
+[tools.erlang.options]
+precompiled = "if_available"
 
 [[tools.pixi]]
 version = "0.70.2"

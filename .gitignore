@@ -4,3 +4,9 @@
 # Phase 2 build + relocate output (ephemeral: source checkout, candidate Emacs.app, otool dumps)
 /build/
 /dist/
+
+# Subagent-driven-development scratch (ledger, task briefs, reports, review packages)
+/.superpowers/
+
+# macOS noise
+.DS_Store
