@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# pipeline/stage-enchant <version> — COPY the bundled enchant payload into
+# build/<version>/Emacs.app (Elixir: `mix payload.enchant`, copy-only). Runs AFTER
+# `mise run build <version>` and BEFORE `mise run relocate <version>`, which then relocates +
+# per-file-signs the payload, deep-signs the whole app, and runs both self-containment gates
+# (R7). Mirrors pipeline/relocate; reads build/<version>/ from the working tree. Default: master.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION="${1:-master}"
+APP="$HERE/build/$VERSION/Emacs.app"
+LIB="$HERE/build/$VERSION/conda-prefix-lib.txt"
+[ -d "$APP" ] || { echo "FATAL: $APP missing — run 'mise run build $VERSION' first"; exit 1; }
+[ -f "$LIB" ] || { echo "FATAL: $LIB missing — run 'mise run build $VERSION' first"; exit 1; }
+# conda_prefix = the env root: strip the trailing /lib from conda-prefix-lib.txt content.
+CONDA_PREFIX_DIR="$(dirname "$(cat "$LIB")")"   # .../envs/default/lib -> .../envs/default
+# mix runs inside the orchestrator mix project; keep paths relative to it (matches pipeline/relocate).
+cd "$HERE/orchestrator"
+mise exec -- mix payload.enchant "../build/$VERSION/Emacs.app" "$CONDA_PREFIX_DIR"
