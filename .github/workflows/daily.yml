@@ -80,11 +80,14 @@ jobs:
         with:
           path: versions/${{ matrix.name }}/.pixi
           key: pixi-${{ matrix.target }}-${{ hashFiles(format('versions/{0}/pixi.lock', matrix.name)) }}
-      - name: build + relocate
+      - name: build + stage enchant + relocate
         run: |
           set -euo pipefail
           mise run build "${{ matrix.name }}"
+          mise run stage-enchant "${{ matrix.name }}"
           mise run relocate "${{ matrix.name }}"
+      - name: cleanroom (no-pixi launch + enchant gate)
+        run: mise run cleanroom "${{ matrix.name }}"
       - name: publish (real) or package+artifact (dry-run)
         run: |
           set -euo pipefail

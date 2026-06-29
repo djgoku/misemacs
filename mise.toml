@@ -60,11 +60,12 @@ run = "bash scripts/e2e-aqua-install.sh"
 # bundle is truly self-contained it resolves its whole dylib closure from Contents/Frameworks alone.
 # pregate (.pregate/macos.sh) runs this inside its fresh disposable macOS VM; restored via trap.
 [tasks.cleanroom]
-description = "Phase 2 DoD: prove the relocated app runs with the pixi env moved aside (no-pixi launch)"
+description = "Phase 2 DoD: prove the relocated app runs with the pixi env moved aside (no-pixi launch); args: [version] (default master)"
 run = '''
 set -euo pipefail
-APP="build/master/Emacs.app"
-ENV_DIR="versions/master/.pixi"
+VERSION="{{arg(name='version', default='master')}}"
+APP="build/$VERSION/Emacs.app"
+ENV_DIR="versions/$VERSION/.pixi"
 [ -d "$APP" ] || { echo "FATAL: $APP missing — run 'mise run build && mise run relocate' first"; exit 1; }
 ASIDE="$(mktemp -d)/pixi"
 restore() { [ -d "$ASIDE" ] && mv "$ASIDE" "$ENV_DIR"; }
@@ -87,19 +88,16 @@ if [ -d "$ENCH" ]; then
   echo ">> [4] applespell default: enchant-2 -l -d en_US must NOT crash (needs staged AppleSpell.config)"
   printf 'helllo\n' | "$ENCH/bin/enchant-2" -l -d en_US >/dev/null   # set -e/pipefail fail the gate on the old SEGFAULT
   echo "   enchant-2 -d en_US OK"
-  echo ">> [5] hunspell option: bundled en_US dict spell-checks via XDG_DATA_DIRS (no system enchant)"
-  hs="$(printf 'teh\n' | env XDG_DATA_DIRS="$ENCH/share" ENCHANT_ORDERING='*:hunspell' "$ENCH/bin/enchant-2" -l -d en_US)"
-  [ "$hs" = "teh" ] || { echo "FATAL: bundled hunspell en_US dict not working (got '$hs')"; exit 1; }
-  echo "   hunspell en_US OK"
-  echo ">> [6] symlinked-launch (O9): dladdr resolves providers under a symlink"
+  echo ">> [5] symlinked-launch (O9): dladdr resolves providers under a symlink"
   LN="$(mktemp -d)/Emacs.app"; ln -s "$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")" "$LN"   # absolute target
   "$LN/Contents/Resources/enchant/bin/enchant-lsmod-2" >/dev/null \
     || { echo "FATAL: providers do not resolve under a symlinked launch (O9)"; exit 1; }
   echo "   symlinked launch OK"
-  # [7] is best-effort BY DESIGN: it needs network (ELPA) + Xcode CLT, which the cleanroom VM may
+  # [6] is best-effort BY DESIGN: it needs network (ELPA) + Xcode CLT, which the cleanroom VM may
   # lack, so 2>/dev/null + the else-branch downgrade it to "skipped" — it can never fail the gate.
-  # The hard enchant gates are [3] (providers) + [4] (en_US no crash) + [5] (hunspell dict).
-  echo ">> [7] jinx end-to-end (best-effort: needs network for ELPA + Xcode CLT)"
+  # The hard enchant gates are [3] (providers) + [4] (en_US no crash). Hunspell dictionaries are
+  # bring-your-own (not bundled), so there is no hunspell-dict gate.
+  echo ">> [6] jinx end-to-end (best-effort: needs network for ELPA + Xcode CLT)"
   if "$APP/Contents/MacOS/Emacs" -Q --batch \
        --eval "(progn (setq package-user-dir (make-temp-file \"elpa\" t))
                       (require 'package)
