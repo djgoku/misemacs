@@ -9,8 +9,9 @@
 packages:
   - type: github_release
     name: djgoku/misemacs-emacs-master
+    version_source: github_tag
     repo_owner: djgoku
-    repo_name: misemacs
+    repo_name: misemacs-emacs-master
     description: Hermetically-built relocatable Emacs.app for macOS — master channel
     version_prefix: "emacs-master-"
     asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
@@ -40,8 +41,9 @@ packages:
       darwin: macos
   - type: github_release
     name: djgoku/misemacs-emacs-31
+    version_source: github_tag
     repo_owner: djgoku
-    repo_name: misemacs
+    repo_name: misemacs-emacs-31
     description: Hermetically-built relocatable Emacs.app for macOS — emacs-31 channel
     version_prefix: "emacs-31-"
     asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
