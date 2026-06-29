@@ -11,7 +11,8 @@ misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/
 - *Reproducible* — every C dependency is pinned by a committed =pixi.lock= (the full transitive closure from conda-forge); the pipeline toolchain is pinned by =mise.lock=.
 - *GUI (Cocoa/NS) build* with tree-sitter, libxml2, and GnuTLS. JSON is native (no jansson). native-comp is off in v1.
 - *CalVer releases* tagged =emacs-<channel>-YYYY-MM-DD= (e.g. =emacs-master-2026-06-14=, =emacs-31-2026-06-14=), each shipping a =SHASUMS256.txt= and ad-hoc code signatures.
-- On your =PATH= after install: =Emacs=, =emacsclient=, =etags=, =ebrowse=.
+- *Bundled spell-checking* — [[https://github.com/AbiWord/enchant][enchant]] (with the AppleSpell + Hunspell providers) ships *inside* the app, relocated to resolve from within the bundle, so [[https://github.com/minad/jinx][jinx]] compiles and runs on a clean machine with no Homebrew/system enchant. See *Spell-checking* below.
+- On your =PATH= after install: =Emacs=, =emacsclient=, =etags=, =ebrowse=, plus =enchant-2= and =enchant-lsmod-2= (the bundled spell-checker CLIs).
 
 *Scope (v1):* macOS =arm64= only, native-comp disabled, ad-hoc signed (not Developer ID / notarized). See the [[docs/superpowers/specs/2026-06-05-bundled-emacs-build-system-design.md][design spec]] §15 for what is designed-for but deferred (native-comp, more arches/OSes, Developer ID, =-nw=).
 
@@ -36,6 +37,39 @@ mise exec -- Emacs --version
 #+end_src
 
 mise verifies the downloaded asset against GitHub's release digest. (The first release appears once the daily workflow has run — see *How it works* below.)
+
+* Spell-checking (bundled enchant)
+
+Every =Emacs.app= bundles [[https://github.com/AbiWord/enchant][enchant]] under =Contents/Resources/enchant/= as a self-contained, relocated sub-prefix (its own =libenchant=, the Hunspell + AppleSpell providers, and their dylib closure). enchant self-relocates at load time (a =dladdr= constructor), so it resolves entirely from inside the app — no Homebrew, no system enchant.
+
+** jinx (primary)
+
+[[https://github.com/minad/jinx][jinx]] compiles a small C module against =libenchant= on first load. misemacs ships everything that compile needs — headers, a relocatable =enchant-2.pc=, and a scoped =pkg-config= shim — plus a discovery-only =site-start.el= that points jinx's compile at the bundle. So on a clean machine:
+
+#+begin_src sh
+# install jinx as usual (ELPA), then enable it — it compiles against the bundled enchant:
+emacs --eval "(progn (package-install 'jinx) (global-jinx-mode))"
+#+end_src
+
+jinx still needs the *Xcode Command Line Tools* (=cc=) on the user machine to compile its module — that is jinx's own requirement, not something a bundle can remove. "Clean machine" for jinx therefore means "clean except CLT". On an Emacs upgrade the bundled =site-start.el= repairs jinx's embedded library path in place (no recompile). Opt out entirely with =(setq misemacs-enchant-disable t)= or =emacs -Q=.
+
+** ispell.el (bonus)
+
+The =enchant-2= CLI is on your =PATH=, so ispell can use it directly:
+
+#+begin_src elisp
+(setq ispell-program-name "enchant-2")
+#+end_src
+
+** Backends — AppleSpell default, Hunspell optional (bring your own dictionary)
+
+The default backend is *AppleSpell* (macOS's built-in, multilingual, license-free spell checker); the bundle ships the AppleSpell locale map so =en_US= / =en_GB= / … check and suggest out of the box with *no dictionary files required* (=enchant-lsmod-2= lists the available providers).
+
+The *Hunspell* provider is also bundled, but *no Hunspell dictionaries ship with the app* — Hunspell is bring-your-own. To use Hunspell for, say, =en_US=:
+
+1. Obtain the two dictionary files =en_US.aff= and =en_US.dic= — e.g. from the [[https://github.com/LibreOffice/dictionaries][LibreOffice dictionaries]] repo (=en/=), your distro's =hunspell-en-us= package, or generate them at [[http://app.aspell.net/create][app.aspell.net/create]].
+2. Put both files in =~/.config/enchant/hunspell/= (the per-user directory the Hunspell provider searches — no environment variables needed).
+3. Tell enchant to prefer Hunspell — add =en_US:hunspell= to =~/.config/enchant/enchant.ordering=.
 
 * How it works
 
@@ -113,3 +147,5 @@ Phases 0–5 are complete: orchestrator core, reproducible deps, build + relocat
 * Upstream & license
 
 Built from [[https://github.com/emacsmirror/emacs][=emacsmirror/emacs=]]. GNU Emacs is free software under the [[https://www.gnu.org/licenses/gpl-3.0.html][GNU GPL v3+]]; misemacs only builds and repackages it, adding nothing to Emacs itself.
+
+The bundled [[https://github.com/AbiWord/enchant][enchant]] is LGPL-2.1+. No Hunspell dictionaries are bundled — Hunspell is bring-your-own (see *Spell-checking* above), so the app ships no third-party word-list data and carries no dictionary license obligations.
