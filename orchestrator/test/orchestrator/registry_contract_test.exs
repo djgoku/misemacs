@@ -86,4 +86,13 @@ defmodule Orchestrator.RegistryContractTest do
 
     assert Regex.scan(~r/-\s+(\S+)/, envs_block, capture: :all_but_first) == [["darwin/arm64"]]
   end
+
+  test "each package points at its per-channel artifact repo", %{registry: reg} do
+    assert reg =~ "repo_name: misemacs-emacs-master"
+    assert reg =~ "repo_name: misemacs-emacs-31"
+  end
+
+  test "both packages keep version_source: github_tag", %{registry: reg} do
+    assert length(Regex.scan(~r/version_source:\s*github_tag/, reg)) == 2
+  end
 end
