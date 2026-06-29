@@ -184,9 +184,14 @@ thin `pipeline/stage-enchant` wrapper, invoked **after build, before the deep si
 **Relocator integration** (minimal, well-bounded change to `Relocate.run/3`):
 - `machos/2` **excludes `Contents/Resources/enchant/**`** — the payload owns relocating its
   own subtree; the Emacs relocator must not flatten enchant's closure into `Frameworks`.
-- `Relocate.run` calls `Payload.Enchant.relocate(app)` (its install_name/rpath edits)
-  **before** `tool.sign_bundle(app)`, so the existing **single deep sign covers enchant
-  too** (no second signing pass).
+- `Relocate.run` calls `Payload.Enchant.relocate(app)` (install_name/rpath edits) **before**
+  `tool.sign_bundle(app)`. **Spike-validated (2026-06-25): `codesign --deep` does NOT
+  re-sign Mach-Os under `Contents/Resources/` — it skips them, and the app-level
+  `--deep --strict` *verify* skips them too.** They still *load* (the toolchain leaves a
+  valid ad-hoc linker-signature that modern `install_name_tool` re-applies after edits), but
+  we must not rely on that surviving every edit. So `Payload.Enchant.relocate` **signs and
+  verifies each enchant Mach-O explicitly** (`codesign --force --sign -` per file, then
+  `codesign --verify --strict`) before the app deep-sign runs over the rest.
 - After verify, run **both** gates: the existing Emacs `gate(app, fw)` (enchant excluded)
   **and** `Payload.Enchant.verify(app)` (otool self-containment over `enchant/**` +
   functional `enchant-2 -list-dicts`, §14).
@@ -231,41 +236,46 @@ Self-locating, **discovery-only** (no policy — does not enable jinx, does not 
 `ispell-program-name`). Fires only if/when jinx loads:
 
 ```elisp
-;; misemacs: point jinx's compile at the bundled enchant; survive Emacs upgrades.
+;; misemacs: point jinx's compile at the bundled enchant. Discovery only — no global env.
 (let* ((app  (expand-file-name "../../.." (file-name-directory load-file-name)))
        (ench (expand-file-name "Contents/Resources/enchant" app))
-       (lib  (expand-file-name "lib" ench))
        (bin  (expand-file-name "bin" ench)))
-  ;; (a) runtime resolution that survives daily Emacs updates without a recompile:
-  (let ((fb (getenv "DYLD_FALLBACK_LIBRARY_PATH")))
-    (setenv "DYLD_FALLBACK_LIBRARY_PATH" (if fb (concat lib ":" fb) lib)))
-  ;; (b) scope our pkg-config shim to jinx's module compile only:
+  ;; scope our pkg-config shim to jinx's module compile only:
   (with-eval-after-load 'jinx
-    (advice-add 'jinx--load-module :around
-      (lambda (orig &rest args)
-        (let ((exec-path (cons bin exec-path)))
-          (apply orig args))))))
+    (when (fboundp 'jinx--load-module)              ; O4: guard before advising
+      (advice-add 'jinx--load-module :around
+        (lambda (orig &rest args)
+          (let ((exec-path (cons bin exec-path)))
+            (apply orig args)))))))
 ```
 
-**Stale-module handling.** jinx recompiles only when its `.so` is absent (§5.2), and the
-compiled module embeds an rpath to *this* dated app. Two mechanisms:
-- **(a) `DYLD_FALLBACK_LIBRARY_PATH`** (above) lets the existing module find the *current*
-  bundle's libenchant after a daily Emacs update **without recompiling** — important since
-  misemacs releases daily but **enchant rarely changes**.
-- **(b) enchant-version stamp:** the shim writes/reads a stamp next to jinx's module
-  recording the enchant version it built against; on a **version** change it deletes the
-  stale `.so` so jinx recompiles. (Keyed on enchant version, not app path, to avoid daily
-  recompiles.)
+**Stale-module handling — spike-validated (2026-06-25).** The compiled `jinx-mod.so` lives
+in the user's elpa dir and embeds an absolute `LC_RPATH` to *this* dated app's `enchant/lib`;
+jinx recompiles only when the `.so` is **absent** (§5.2). On an Emacs update the app path
+changes and that rpath goes stale.
+
+The spike **refuted the original DYLD self-heal**: mid-process `setenv "DYLD_FALLBACK_LIBRARY_PATH"`
+from `site-start.el` does **not** reach a later `dlopen` (dyld snapshots the env at launch).
+What worked:
+- **Embedded `@rpath` (primary).** A module built with `-Wl,-rpath,<enchant/lib>` (what the
+  §10 shim emits) resolves libenchant with no env at all — *while the path is current*.
+- **On staleness the shim rpath-patches the module in place — chosen, spike-validated:**
+  `install_name_tool -rpath <old> <current> jinx-mod.so` rewrites the embedded rpath and
+  (arm64) re-signs automatically; the patched module then `dlopen`s with **no recompile, no
+  `cc`, no env**. Staleness is detected by comparing the module's embedded rpath (`otool -l`)
+  to the current `enchant/lib`. **Fallback** if a patch ever fails: delete-to-recompile
+  (remove the stale `.so`; jinx rebuilds it). A launch-time env wrapper also works but is more
+  invasive and reintroduces DYLD fragility under a future hardened runtime — **not** chosen.
 
 > **Open items / review questions:**
-> - **O3:** confirm `DYLD_FALLBACK_LIBRARY_PATH` is honored for an `@rpath`-miss under an
->   **ad-hoc** signature (we are ad-hoc, *not* hardened-runtime, so `DYLD_*` should not be
->   stripped — but verify on a clean VM). If not honored, fall back to mechanism (b) keyed
->   on app path (recompile per upgrade) and document it.
-> - **O4:** confirm jinx's internal compile entry point name/arity (`jinx--load-module`)
->   against the pinned jinx version before advising it.
-> - **O5:** decide whether `site-start.el` auto-load is acceptable, or gate behind an env
->   opt-out; `-Q`/`--no-site-file` already bypasses it.
+> - **O3 (spike-resolved):** DYLD `setenv` self-heal is dead; staleness is fixed by an
+>   in-place `install_name_tool -rpath` patch (recompile-free, auto re-signed), with
+>   delete-to-recompile as the fallback.
+> - **O4 (folded in):** advice is now guarded by `fboundp 'jinx--load-module`; still record
+>   the jinx version tested and re-confirm name/arity against the pin.
+> - **O5:** `site-start.el` no longer mutates global env (DYLD removed); its only effect is
+>   adding `with-eval-after-load 'jinx` advice — benign if jinx is absent, and `-Q` /
+>   `--no-site-file` bypasses it. Decide if an explicit opt-out var is still wanted.
 
 ## 12. PATH exposure
 
@@ -293,7 +303,9 @@ then it is hand-edited — two entries.)
 Extend the existing gates rather than inventing a parallel harness:
 - **Relocation gates (build host):** Emacs `macho_gate` PASS (enchant excluded) **and**
   `Payload.Enchant.verify` PASS — otool self-containment over `enchant/**` (no foreign
-  deps/rpaths; every `@rpath/<base>` resolvable within `enchant/lib`).
+  deps/rpaths; every `@rpath/<base>` resolvable within `enchant/lib`) **plus a per-file
+  `codesign --verify --strict` on every enchant Mach-O** (the app-level `--deep` verify
+  skips `Resources/` — §8, spike-validated).
 - **Functional smoke (build host):** `…/enchant/bin/enchant-2 -list-dicts` lists the
   applespell (and hunspell) providers.
 - **Cleanroom (pregate macOS VM) — extend `mise run cleanroom`:** with the pixi env moved
@@ -309,11 +321,12 @@ Extend the existing gates rather than inventing a parallel harness:
 
 | # | Item | Where |
 |---|------|-------|
+| S1 | ✅ spike-resolved: `codesign --deep` skips `Resources/` → payload self-signs each Mach-O | §8 |
 | O1 | Exact `site-lisp` path in the `--with-ns` install tree | §7 |
 | O2 | Fake `pkg-config` shim vs. bundling real `pkgconf` | §10 |
-| O3 | `DYLD_FALLBACK_LIBRARY_PATH` honored for `@rpath`-miss under ad-hoc sign | §11 |
-| O4 | jinx internal compile fn name/arity (`jinx--load-module`) | §11 |
-| O5 | `site-start.el` auto-load acceptability / opt-out | §11 |
+| O3 | ✅ spike-resolved: DYLD self-heal dead; staleness fixed by in-place rpath-patch | §11 |
+| O4 | ⚙ folded: advice guarded by `fboundp`; still confirm name/arity vs. pin | §11 |
+| O5 | `site-start.el` opt-out? (no longer mutates global env) | §11 |
 | O6 | applespell suggestion quality (else ship one `en_US` hunspell dict) | §13 |
 | O7 | Phase-0 prerequisite: feedstock published to a channel; channel name | §2, §6 |
 | O8 | enchant 2.8 `enchant.ordering` lookup path inside the sub-prefix | §13 |
@@ -324,8 +337,9 @@ Extend the existing gates rather than inventing a parallel harness:
 2. Add `enchant` to both `pixi.toml`s + re-lock (Decision D).
 3. `Orchestrator.Payload` behaviour + `Orchestrator.Payload.Enchant` (stage/relocate/verify),
    reusing `Orchestrator.Macho` with bundle-root = `enchant/lib`.
-4. Relocator change: exclude `enchant/**` from `machos/2`; call payload relocate before
-   sign; run both gates (§8).
+4. Relocator change: exclude `enchant/**` from `machos/2`; `Payload.Enchant.relocate`
+   self-signs + verifies each enchant Mach-O (§8, spike-validated); then the app deep-sign;
+   run both gates.
 5. `.pc` rewrite + `pkg-config` shim + `site-start.el` (§9–§11).
 6. Registry `files:` + `release.names` bin entry (§12).
 7. Extend `cleanroom` with the enchant + jinx smoke (§14).
