@@ -95,6 +95,32 @@ and assert `(fboundp 'jinx--load-module)` with a clear O4 message before using i
 launch) are **pass/fail Task-6 gates**, not "record if settled". O7: the feedstock channel URL must be filled
 before the re-lock. S1 is regression-covered by the R9 `verify_file` assertions.
 
+## Backend + Phase-0 + leak_check revisions (2026-06-28, real-artifact debug) — AUTHORITATIVE
+
+A focused debug spike (git-source-built **real** feedstock enchant staged + lldb'd in the cleanroom)
+supersedes three earlier assumptions. Apply throughout:
+
+- **R13 — Phase 0 = git-source via pixi-build (no channel publish).** Everywhere the plan/spec says
+  "publish the feedstock to a conda channel" / `<feedstock-channel>`, use instead, in **both**
+  `versions/<v>/pixi.toml`: `[workspace] preview = ["pixi-build"]` and
+  `enchant = { git = "https://github.com/djgoku/enchant-feedstock", branch = "misemacs-recipe", subdirectory = "recipe" }`.
+  `pixi.lock` pins the git commit (the reproducibility pin). R10's "assert URL is the feedstock channel"
+  becomes "assert the locked enchant source is the feedstock git repo + commit". No prefix.dev/anaconda account.
+- **R14 — `stage_copy` must stage `share/enchant-2/AppleSpell.config`; no hunspell dict is bundled.**
+  Root cause of the en_US SEGFAULT + `dict_exists("en_US")=0` (handoff Finding 2) is that `stage_copy` dropped
+  the feedstock's `AppleSpell.config` (applespell's locale map) — NOT a dict-less hunspell crash. Fix: copy
+  `AppleSpell.config` from the prefix (guarded by `File.exists?`); raise if the applespell provider is staged
+  without it. Decision C is "applespell default, zero bundled dictionaries; hunspell is bring-your-own" (spec
+  §13) — no `en_US.aff`/`.dic` ship; the e2e asserts `AppleSpell.config` is staged and `share/hunspell/` is
+  **not**. **DONE on branch.** Residual upstream applespell bare-`en` crash → feedstock-patch follow-up
+  (region tags are safe).
+- **R15 — drop the build-prefix `leak_check`.** Real conda dylibs bake the install prefix into inert
+  data-section strings → `verify/3`'s `strings`-grep false-flagged 6 relocated libs. Removed from `verify/3`
+  (`conda_prefix` arg kept for signature stability, unused) and the leak failure test removed. **This also
+  voids the Task-6 cleanroom `strings | grep '/(envs|\.pixi)/'` step (R15) — do not add it.** The macho gate +
+  per-file `codesign --verify --strict` + the functional cleanroom run are the real self-containment proof.
+  Supersedes spec §14's leak bullet, the R9 leak mention, and Codex-D's `strings|grep` recommendation.
+
 ## File Structure
 
 | Path | New? | Responsibility |
@@ -868,7 +894,7 @@ LN="$(mktemp -d)/Emacs.app"; ln -s "$APP" "$LN"
 Run: `mise run build && mise run stage-enchant && mise run relocate && mise run cleanroom` (per R7: copy the payload **before** `relocate`, which then relocates + per-file-signs it, deep-signs/seals the whole app, and runs both gates).
 Expected: `enchant-lsmod-2` lists **applespell** (+ hunspell); no leak; jinx compiles its module via the bundled shim and `jinx ok` prints; symlinked launch OK.
 
-> **Validation points (real artifact):** confirm applespell appears in `enchant-lsmod-2` (resolves **O6** — if applespell suggestions are weak in practice, follow spec §13 and add one `en_US` hunspell dict). Confirm the jinx module compiled with no system pkg-config present (the shim worked). Confirm O9 (symlinked launch) — if `dladdr` returns the symlink-resolved path and providers still load, record it; if not, the payload must resolve the real path before launch.
+> **Validation points (real artifact):** confirm applespell appears in `enchant-lsmod-2` (resolves **O6**; hunspell is bring-your-own per spec §13 — no dict bundled). Confirm the jinx module compiled with no system pkg-config present (the shim worked). Confirm O9 (symlinked launch) — if `dladdr` returns the symlink-resolved path and providers still load, record it; if not, the payload must resolve the real path before launch.
 
 - [ ] **Step 5: Commit**
 ```bash
