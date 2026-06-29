@@ -10,7 +10,7 @@ defmodule Mix.Tasks.Release.Manifest do
                            --out ../dist/master/build-manifest.json [--root ..]
   """
   use Mix.Task
-  alias Orchestrator.{Core.Hash, Manifest}
+  alias Orchestrator.{Core.Hash, Manifest, Naming}
 
   @switches [
     version: :string,
@@ -18,17 +18,21 @@ defmodule Mix.Tasks.Release.Manifest do
     upstream_sha: :string,
     out: :string,
     root: :string,
-    clt_fingerprint: :string
+    clt_fingerprint: :string,
+    artifact_base: :string
   ]
 
   @impl true
   def run(argv) do
     {opts, [], []} = OptionParser.parse(argv, strict: @switches)
+    root = opts[:root] || ".."
     version = required(opts, :version)
     tag = required(opts, :tag)
     sha = required(opts, :upstream_sha)
     out = required(opts, :out)
-    root = opts[:root] || ".."
+
+    channel = channel_for!(root, version)
+    base = opts[:artifact_base] || System.get_env("MISEMACS_ARTIFACT_BASE") || "djgoku/misemacs"
 
     ref = ref_for!(root, version)
 
@@ -55,6 +59,8 @@ defmodule Mix.Tasks.Release.Manifest do
 
     manifest = %{
       "schema" => 1,
+      "channel" => channel,
+      "repo" => Naming.artifact_repo(base, channel),
       "versions" => %{
         version => %{
           "ref" => ref,
@@ -76,6 +82,15 @@ defmodule Mix.Tasks.Release.Manifest do
       ref
     else
       _ -> Mix.raise("no such version #{inspect(version)} in versions.toml")
+    end
+  end
+
+  defp channel_for!(root, version) do
+    with {:ok, map} <- Toml.decode(File.read!(Path.join(root, "versions.toml"))),
+         %{"channel" => channel} <- get_in(map, ["versions", version]) do
+      channel
+    else
+      _ -> Mix.raise("no such version #{inspect(version)} (missing channel) in versions.toml")
     end
   end
 

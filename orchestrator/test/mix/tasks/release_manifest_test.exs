@@ -86,4 +86,25 @@ defmodule Mix.Tasks.Release.ManifestTest do
     File.rm!(Path.join(root, "versions/master/pixi.lock"))
     assert_raise File.Error, fn -> run(root, out) end
   end
+
+  test "fragment stamps channel (from versions.toml) and artifact repo at top level" do
+    dir = Path.join(System.tmp_dir!(), "frag-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf!(dir) end)
+    out = Path.join(dir, "build-manifest.json")
+
+    Mix.Tasks.Release.Manifest.run([
+      "--version", "master",
+      "--tag", "emacs-master-2026-06-29",
+      "--upstream-sha", "deadbeef",
+      "--out", out,
+      "--root", "..",
+      "--clt-fingerprint", "test-clt"
+    ])
+
+    m = out |> File.read!() |> JSON.decode!()
+    assert m["channel"] == "master"
+    assert m["repo"] == "djgoku/misemacs-emacs-master"
+    assert m["versions"]["master"]["released_tag"] == "emacs-master-2026-06-29"
+  end
 end
