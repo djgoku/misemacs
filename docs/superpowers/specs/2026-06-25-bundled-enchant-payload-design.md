@@ -289,9 +289,15 @@ then it is hand-edited — two entries.)
 ## 13. Backend / provider configuration
 
 - **applespell is the default** ordering for all languages; hunspell is the dictionary-less
-  fallback. If enchant needs an explicit ordering, ship a minimal config in the sub-prefix
-  (e.g. `enchant/share/enchant/enchant.ordering` — confirm enchant 2.8 lookup path).
-- No `enchant.ordering` dictionary downloads; no `.dic`/`.aff` shipped.
+  fallback. Ship a one-line ordering config **`*:applespell,hunspell`** to make applespell
+  the default backend.
+- **Ordering path — spike-resolved (O8):** enchant 2.8 reads global ordering from
+  `etc/enchant-2/enchant.ordering` (config) and `share/enchant-2/enchant.ordering` (data) —
+  **NOT** `share/enchant/`. Ship it at **`enchant/share/enchant-2/enchant.ordering`**.
+  `ENCHANT_CONFIG_DIR` / `~/.config/enchant` can override at runtime but affect *ordering
+  only*, not provider-module lookup — so the §5.1 `dladdr` self-relocation is the sole
+  mechanism that finds providers (no env shortcut exists).
+- No dictionary downloads; no `.dic`/`.aff` shipped.
 
 > **Open item O6 / review question:** validate enchant's **applespell** provider quality
 > for *suggestions* (checking is fine; some builds were thin on suggestions). If weak,
@@ -306,14 +312,20 @@ Extend the existing gates rather than inventing a parallel harness:
   deps/rpaths; every `@rpath/<base>` resolvable within `enchant/lib`) **plus a per-file
   `codesign --verify --strict` on every enchant Mach-O** (the app-level `--deep` verify
   skips `Resources/` — §8, spike-validated).
-- **Functional smoke (build host):** `…/enchant/bin/enchant-2 -list-dicts` lists the
-  applespell (and hunspell) providers.
+- **Functional smoke (build host):** `…/enchant/bin/enchant-2 -list-dicts` (and
+  `enchant-lsmod-2`, also installed) lists the applespell + hunspell providers.
+- **Build-prefix leak gate (spike-D):** `strings` over every enchant Mach-O *and* the
+  `.pc` greps for the conda build prefix → **fail if found**. A cheap catch-all for any
+  relocation hole the otool gate can't see (embedded config/ordering paths, etc.).
 - **Cleanroom (pregate macOS VM) — extend `mise run cleanroom`:** with the pixi env moved
   aside (proving no build-env leakage), run:
   1. `enchant-2 -list-dicts` resolves providers from the bundle alone.
   2. A jinx end-to-end: `package-install jinx`, force module compile, spell-check a known
      word — proving headers + shim `pkg-config` + link + runtime libenchant resolution all
      work with no Homebrew/system enchant. (Requires CLT in the VM — see §5.2.)
+  3. **Symlinked-launch test (spike-D / O9):** invoke the app **through a symlink** (mise/aqua
+     installs can symlink) and re-run (1) — confirms `dladdr` resolves providers under
+     symlinked access, not just direct paths.
 - **Package self-verify:** `enchant-2` present + executable in the tarball (via the
   release.names bin list).
 
@@ -329,7 +341,8 @@ Extend the existing gates rather than inventing a parallel harness:
 | O5 | `site-start.el` opt-out? (no longer mutates global env) | §11 |
 | O6 | applespell suggestion quality (else ship one `en_US` hunspell dict) | §13 |
 | O7 | Phase-0 prerequisite: feedstock published to a channel; channel name | §2, §6 |
-| O8 | enchant 2.8 `enchant.ordering` lookup path inside the sub-prefix | §13 |
+| O8 | ✅ spike-resolved: ordering at `share/enchant-2/` (or `etc/enchant-2/`), not `share/enchant/` | §13 |
+| O9 | `dladdr` symlink-path semantics under mise/aqua symlinked installs — test symlinked launch | §14 |
 
 ## 16. Implementation outline (for the plan, not this spec)
 
