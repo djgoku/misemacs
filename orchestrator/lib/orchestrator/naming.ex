@@ -43,7 +43,9 @@ defmodule Orchestrator.Naming do
       "Emacs.app/Contents/MacOS/Emacs",
       "Emacs.app/Contents/MacOS/bin/emacsclient",
       "Emacs.app/Contents/MacOS/bin/etags",
-      "Emacs.app/Contents/MacOS/bin/ebrowse"
+      "Emacs.app/Contents/MacOS/bin/ebrowse",
+      "Emacs.app/Contents/Resources/enchant/bin/enchant-2",
+      "Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2"
     ]
   end
 end

@@ -32,6 +32,10 @@ packages:
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/etags"
           - name: ebrowse
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/ebrowse"
+          - name: enchant-2
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-2"
+          - name: enchant-lsmod-2
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2"
     replacements:
       darwin: macos
   - type: github_release
@@ -59,5 +63,9 @@ packages:
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/etags"
           - name: ebrowse
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/ebrowse"
+          - name: enchant-2
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-2"
+          - name: enchant-lsmod-2
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2"
     replacements:
       darwin: macos

@@ -42,4 +42,10 @@ defmodule Orchestrator.NamingTest do
     assert "Emacs.app/Contents/MacOS/bin/etags" in bins
     assert "Emacs.app/Contents/MacOS/bin/ebrowse" in bins
   end
+
+  test "bundle_binaries includes the enchant CLIs under Resources/enchant/bin" do
+    bins = Naming.bundle_binaries()
+    assert "Emacs.app/Contents/Resources/enchant/bin/enchant-2" in bins
+    assert "Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2" in bins
+  end
 end
