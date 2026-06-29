@@ -54,7 +54,7 @@ defmodule Orchestrator.Payload.Enchant do
         --libs)   out="$out -L$prefix/lib -lenchant-2 -Wl,-rpath,$prefix/lib" ;;
       esac
     done
-    echo $out
+    echo "$out"
     """
   end
 
@@ -87,10 +87,10 @@ defmodule Orchestrator.Payload.Enchant do
           (when (fboundp 'jinx--load-module)
             (advice-add 'jinx--load-module :around
                         (lambda (orig &rest args)
-                          (let ((exec-path (cons bin exec-path))) (apply orig args)))))
-          (dolist (dir load-path)
-            (dolist (mod (file-expand-wildcards (expand-file-name "jinx-mod*.so" dir)))
-              (ignore-errors (misemacs--enchant-rpath-fix mod lib)))))))
+                          (dolist (dir load-path)
+                            (dolist (mod (file-expand-wildcards (expand-file-name "jinx-mod*.so" dir)))
+                              (ignore-errors (misemacs--enchant-rpath-fix mod lib))))
+                          (let ((exec-path (cons bin exec-path))) (apply orig args))))))))
     """
   end
 
