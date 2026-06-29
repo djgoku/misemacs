@@ -46,6 +46,20 @@ defmodule Orchestrator.Macho.Otool do
     end
   end
 
+  @impl true
+  def sign_file(path) do
+    {_, 0} = System.cmd("codesign", ["--force", "--sign", "-", path], stderr_to_stdout: true)
+    :ok
+  end
+
+  @impl true
+  def verify_file(path) do
+    case System.cmd("codesign", ["--verify", "--strict", path], stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      {out, _} -> {:error, String.trim(out)}
+    end
+  end
+
   defp run(path, cmd, args) do
     {out, _} = System.cmd(cmd, args ++ [path], stderr_to_stdout: true)
     out

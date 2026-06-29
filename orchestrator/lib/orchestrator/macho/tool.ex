@@ -10,4 +10,6 @@ defmodule Orchestrator.Macho.Tool do
   @callback delete_rpath(Path.t(), String.t()) :: :ok
   @callback sign_bundle(Path.t()) :: :ok
   @callback verify_bundle(Path.t()) :: :ok | {:error, String.t()}
+  @callback sign_file(Path.t()) :: :ok
+  @callback verify_file(Path.t()) :: :ok | {:error, String.t()}
 end

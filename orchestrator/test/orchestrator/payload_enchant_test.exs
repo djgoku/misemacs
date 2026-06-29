@@ -39,4 +39,24 @@ defmodule Orchestrator.Payload.EnchantTest do
   test "ordering_contents makes applespell default" do
     assert Enchant.ordering_contents() == "*:applespell,hunspell\n"
   end
+
+  @tag :macos
+  test "Otool.sign_file then verify_file round-trips on a freshly-edited dylib" do
+    t = Path.join(System.tmp_dir!(), "sf-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(t)
+    on_exit(fn -> File.rm_rf!(t) end)
+    src = Path.join(t, "x.c")
+    dy = Path.join(t, "libx.dylib")
+    File.write!(src, "int x(void){return 1;}\n")
+
+    {_, 0} =
+      System.cmd("clang", ["-dynamiclib", "-install_name", "@rpath/libx.dylib", src, "-o", dy])
+
+    # install_name edit invalidates/relinker-signs; verify_file then sign_file must yield a strict-valid sig
+    {_, 0} =
+      System.cmd("install_name_tool", ["-id", "@rpath/libx.dylib", dy], stderr_to_stdout: true)
+
+    assert :ok = Orchestrator.Macho.Otool.sign_file(dy)
+    assert :ok = Orchestrator.Macho.Otool.verify_file(dy)
+  end
 end

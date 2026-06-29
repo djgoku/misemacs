@@ -16,6 +16,8 @@ defmodule Orchestrator.RelocateTest do
     defdelegate add_rpath(p, rp), to: Otool
     defdelegate delete_rpath(p, rp), to: Otool
     defdelegate verify_bundle(p), to: Otool
+    defdelegate sign_file(p), to: Otool
+    defdelegate verify_file(p), to: Otool
 
     def sign_bundle(app) do
       :ok = Otool.sign_bundle(app)
