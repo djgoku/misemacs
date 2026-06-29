@@ -34,7 +34,12 @@ defmodule Mix.Tasks.Orchestrate.Decide do
     date = fetch!(opts, :date)
     mode = fetch!(opts, :mode)
     versions = Manifest.versions!(root)
-    {:ok, jobs} = Manifest.load(Path.join(root, "versions.toml"), Path.join(root, "targets.toml"))
+    {:ok, jobs} =
+      Manifest.load(
+        Path.join(root, "versions.toml"),
+        Path.join(root, "targets.toml"),
+        artifact_base(opts)
+      )
 
     {states, manifest} =
       if mode == "detect" do
@@ -90,4 +95,10 @@ defmodule Mix.Tasks.Orchestrate.Decide do
 
   defp fetch!(opts, key),
     do: opts[key] || Mix.raise("missing --#{key |> Atom.to_string() |> String.replace("_", "-")}")
+
+  # Artifact-repo base: env override (lab/CI) else the SOURCE repo string itself
+  # (djgoku/misemacs -> djgoku/misemacs-emacs-<channel>). Default keeps non-detect modes working.
+  defp artifact_base(opts) do
+    System.get_env("MISEMACS_ARTIFACT_BASE") || opts[:repo] || "djgoku/misemacs"
+  end
 end
