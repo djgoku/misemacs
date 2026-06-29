@@ -25,6 +25,76 @@ The feedstock branch `djgoku/enchant-feedstock@misemacs-recipe` must be **built 
 - **Tasks 1–5 do NOT need it** — they build + test the entire Elixir seam against clang-built synthetic Mach-O fixtures (proven by the facet-A spike). Implement and merge them now.
 - **Task 6 is Phase-0-gated** — it adds the pixi dep (which can only resolve once published) and the real build/cleanroom e2e. It is clearly marked; do not start it until Phase 0 is done.
 
+## Review revisions (Codex 2026-06-28) — AUTHORITATIVE, apply throughout
+
+A Codex review found real bugs in the task code below. **These corrections supersede the
+as-written task code wherever they conflict.** (Finding #5 — the `~S` heredoc backslashes in
+`site_start_el/0` — was a **false positive**: `~S` emits `\\(`/`\\)` literally, which Emacs's
+string reader turns into the regexp `\(`/`\)`; leave them as written.)
+
+**R1 (Task 2, #1) — keep the existing test double compiling.** Adding `sign_file`/`verify_file`
+to `Macho.Tool` turns `Orchestrator.RelocateTest.TamperAfterSignTool` (relocate_test.exs:7) into
+a behaviour with missing callbacks → `--warnings-as-errors` fails. In Task 2, also add to that
+double: `defdelegate sign_file(p), to: Otool` and `defdelegate verify_file(p), to: Otool`.
+
+**R2 (Task 3, #2) — guard `set_id` to dylibs.** Providers are `MH_BUNDLE`, CLIs are executables;
+`install_name_tool -id` (which `Otool.set_id` asserts exit 0) errors on a non-dylib. In
+`relocate/2`: `if tool.id(m), do: tool.set_id(m, "@rpath/" <> Path.basename(m))`.
+
+**R3 (Task 3, #3/#14) — CLIs must stay executable.** `cp!/2` forces `0644`; `pipeline/package`
+checks `-x`. Add `defp cp_exec!(from, to), do: (File.cp!(from, to); File.chmod!(to, 0o755))` and
+copy `enchant-2`/`enchant-lsmod-2` with `cp_exec!`, not `cp!`.
+
+**R4 (Task 3, #4) — unversioned symlink: idempotent + never scanned as Mach-O.** Create it as
+`_ = File.rm(Path.join(lib, "libenchant-2.dylib")); File.ln_s!("libenchant-2.2.dylib", Path.join(lib, "libenchant-2.dylib"))`.
+And make `machos/2` skip symlinks (else it follows the symlink and double-edits the versioned
+dylib) by filtering with `File.lstat/1`:
+```elixir
+defp machos(ench, tool) do
+  Path.join(ench, "**") |> Path.wildcard()
+  |> Enum.filter(fn f -> match?({:ok, %File.Stat{type: :regular}}, File.lstat(f)) end)
+  |> Enum.filter(&tool.macho?/1)
+end
+```
+
+**R5 (Task 3, #6) — stage owns its dirs.** Add `File.mkdir_p!(Path.join(app, "Contents/Resources/site-lisp"))`
+before writing `site-start.el`; don't rely on the test creating it. (O1 confirms the real path in Task 7.)
+
+**R6 (Task 3 split, #7/#9) — separate copy from relocate.** Public API is exactly: `stage_copy(app, conda_prefix)`
+(copy + closure + generated files; **no** install_name edits), `relocate(app)` (install_name/rpath
+normalize in `enchant/lib` + per-file sign), `verify(app, conda_prefix)` (gate). `tool` is a defaulted
+last arg on each (`stage_copy/3`, `relocate/2`, `verify/3` are the injectable forms). Update the file-table
+arities and the spec's §8 API note to match.
+
+**R7 (Task 4 + Task 6, #9/#10) — one sealed sequence; `mix relocate` owns both gates.**
+- Pipeline order: `build → stage-enchant (copy only) → relocate → package`.
+- `pipeline/stage-enchant` → `mix payload.enchant`, which now calls **only** `Enchant.stage_copy/2`.
+- `Orchestrator.Relocate.run/3`: after the Frameworks closure is built+rewritten and **before**
+  `tool.sign_bundle(app)`, do `if File.dir?(ench), do: Enchant.relocate(app, tool)` (per-file signs the
+  payload). Then `tool.sign_bundle(app)` deep-signs/seals the whole bundle incl. the payload. After
+  `verify_bundle`, run **both** gates: `Enchant.verify(app, conda_prefix, tool)` (where `conda_prefix` =
+  `build_libdir` minus the trailing `/lib`) **and** the existing `gate(app, fw, tool)`. `package` stays
+  check-only — nothing mutates the bundle after the deep sign (#9).
+
+**R8 (Task 4 test, #11/#12) — make the exclusion test real.** Build the enchant fixture dylib with a
+**foreign dep in `buildlib`** and assert that dep is NOT copied into `Contents/Frameworks` (proves the walk
+skipped the subtree). Add a pure fake-tool unit test that `machos/2` rejects a path under `Resources/enchant/`.
+
+**R9 (Task 3 e2e, #8/#13) — assert what matters.** Add: each staged CLI is executable
+(`Bitwise.band(File.stat!(p).mode, 0o111) != 0`); each provider is signed (`verify_file` → `:ok`), has no
+foreign deps/rpaths, and no `@rpath` dep on another provider. (Provider discovery / applespell / dladdr
+stay Task-6, real-artifact.)
+
+**R10 (Task 6, #15) — feedstock channel first.** `channels = ["<feedstock-channel>", "conda-forge"]`, and
+assert the resolved `enchant` URL in `pixi.lock` is the feedstock channel (not conda-forge) before proceeding.
+
+**R11 (Task 6, #16) — pin jinx + probe.** Pin a specific jinx version in the cleanroom e2e (not ELPA-latest)
+and assert `(fboundp 'jinx--load-module)` with a clear O4 message before using it.
+
+**R12 (Task 7, #17) — make open items hard gates.** O6 (applespell in `enchant-lsmod-2`) and O9 (symlinked
+launch) are **pass/fail Task-6 gates**, not "record if settled". O7: the feedstock channel URL must be filled
+before the re-lock. S1 is regression-covered by the R9 `verify_file` assertions.
+
 ## File Structure
 
 | Path | New? | Responsibility |
@@ -795,7 +865,7 @@ LN="$(mktemp -d)/Emacs.app"; ln -s "$APP" "$LN"
 ```
 
 - [ ] **Step 4: Run the full local build + payload + cleanroom**
-Run: `mise run build && mise run relocate && mise run stage-enchant && mise run cleanroom`
+Run: `mise run build && mise run stage-enchant && mise run relocate && mise run cleanroom` (per R7: copy the payload **before** `relocate`, which then relocates + per-file-signs it, deep-signs/seals the whole app, and runs both gates).
 Expected: `enchant-lsmod-2` lists **applespell** (+ hunspell); no leak; jinx compiles its module via the bundled shim and `jinx ok` prints; symlinked launch OK.
 
 > **Validation points (real artifact):** confirm applespell appears in `enchant-lsmod-2` (resolves **O6** — if applespell suggestions are weak in practice, follow spec §13 and add one `en_US` hunspell dict). Confirm the jinx module compiled with no system pkg-config present (the shim worked). Confirm O9 (symlinked launch) — if `dladdr` returns the symlink-resolved path and providers still load, record it; if not, the payload must resolve the real path before launch.
