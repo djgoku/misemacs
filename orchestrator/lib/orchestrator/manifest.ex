@@ -21,12 +21,13 @@ defmodule Orchestrator.Manifest do
           target: String.t(),
           os: String.t(),
           arch: String.t(),
-          runner: String.t()
+          runner: String.t(),
+          repo: String.t()
         }
 
   @doc "Pure cross-product of versions × ENABLED targets (fail-closed), sorted for determinism."
-  @spec jobs(map(), map()) :: [job()]
-  def jobs(versions, targets) do
+  @spec jobs(map(), map(), String.t()) :: [job()]
+  def jobs(versions, targets, base) do
     enabled = for {tn, t} <- targets, Map.get(t, "enabled", false), do: {tn, t}
 
     for {vn, v} <- versions, {tn, t} <- enabled do
@@ -37,20 +38,21 @@ defmodule Orchestrator.Manifest do
         target: tn,
         os: t["os"],
         arch: t["arch"],
-        runner: t["runner"]
+        runner: t["runner"],
+        repo: Orchestrator.Naming.artifact_repo(base, v["channel"])
       }
     end
     |> Enum.sort_by(&{&1.name, &1.target})
   end
 
-  @doc "Read + parse both TOML manifests into a job list."
-  @spec load(Path.t(), Path.t()) :: {:ok, [job()]} | {:error, term()}
-  def load(versions_path, targets_path) do
+  @doc "Read + parse both TOML manifests into a job list (artifact `base` for repo derivation)."
+  @spec load(Path.t(), Path.t(), String.t()) :: {:ok, [job()]} | {:error, term()}
+  def load(versions_path, targets_path, base) do
     with {:ok, vbin} <- File.read(versions_path),
          {:ok, tbin} <- File.read(targets_path),
          {:ok, vmap} <- Toml.decode(vbin),
          {:ok, tmap} <- Toml.decode(tbin) do
-      {:ok, jobs(Map.get(vmap, "versions", %{}), Map.get(tmap, "targets", %{}))}
+      {:ok, jobs(Map.get(vmap, "versions", %{}), Map.get(tmap, "targets", %{}), base)}
     end
   end
 

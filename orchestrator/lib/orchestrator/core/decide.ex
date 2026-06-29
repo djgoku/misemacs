@@ -64,7 +64,7 @@ defmodule Orchestrator.Core.Decide do
   end
 
   @doc """
-  Join a plan against the full job list (`Orchestrator.Manifest.jobs/2` output) by
+  Join a plan against the full job list (`Orchestrator.Manifest.jobs/3` output) by
   `:name`, yielding the per-cell build matrix (changed versions × their targets). Only
   jobs whose version is in `plan.build` survive; job order is preserved.
   """
