@@ -152,26 +152,26 @@ defmodule Orchestrator.Payload.Enchant do
     #    feedstock at share/enchant-2/. REQUIRED for applespell (the default backend): without it
     #    applespell claims no locale, `enchant_broker_dict_exists("en_US")` returns 0, and enchant
     #    falls back to the bare-language tag, which hits a flaky upstream applespell NULL-deref
-    #    crash (verified 2026-06-28). Copy it verbatim from the prefix when present.
+    #    crash (verified 2026-06-28). HARD requirement whenever the applespell provider is staged:
+    #    a missing config would silently resurrect that crash, so fail loudly instead.
     apple_config = src.("share/enchant-2/AppleSpell.config")
+    applespell_staged? = File.exists?(Path.join(lib, "enchant-2/enchant_applespell.so"))
 
-    if File.exists?(apple_config) do
-      cp!(apple_config, Path.join(ench, "share/enchant-2/AppleSpell.config"))
+    cond do
+      File.exists?(apple_config) ->
+        cp!(apple_config, Path.join(ench, "share/enchant-2/AppleSpell.config"))
+
+      applespell_staged? ->
+        raise "enchant payload: applespell provider staged but #{apple_config} is missing — " <>
+                "applespell would claim no locale and crash on the bare-language fallback"
+
+      true ->
+        :ok
     end
 
-    # 5. Bundled en_US hunspell dictionary — the "working hunspell option" (applespell is the
-    #    default; hunspell is selectable per design §13). Vendored in-repo under priv/ with a
-    #    permissive SCOWL/LibreOffice license (README ships beside the data). Staged at the XDG
-    #    data location <prefix>/share/hunspell so the hunspell provider finds it when the bundle's
-    #    share is on XDG_DATA_DIRS (the provider searches g_get_system_data_dirs()/hunspell +
-    #    ~/.config/enchant/hunspell — NOT the enchant prefix, so dladdr relocation doesn't reach it).
-    hunspell_dst = Path.join(ench, "share/hunspell")
-    File.mkdir_p!(hunspell_dst)
-
-    for f <- Path.wildcard(Path.join(hunspell_dict_dir(), "*")) do
-      cp!(f, Path.join(hunspell_dst, Path.basename(f)))
-    end
-
+    # NOTE: no Hunspell dictionaries are bundled. applespell is the default backend and needs no
+    # dict files. Hunspell is a "bring your own dictionary" option — users drop en_US.aff/en_US.dic
+    # into ~/.config/enchant/hunspell/ (the per-user dir the provider searches). See README.
     :ok
   end
 
@@ -286,10 +286,6 @@ defmodule Orchestrator.Payload.Enchant do
       end
     end)
   end
-
-  # The vendored en_US hunspell dictionary (priv/enchant/hunspell/en_US/{en_US.aff,en_US.dic,
-  # README_en_US.txt}). Permissive SCOWL/LibreOffice license — see the bundled README.
-  defp hunspell_dict_dir, do: Path.join(:code.priv_dir(:orchestrator), "enchant/hunspell/en_US")
 
   defp cp!(from, to) do
     File.cp!(from, to)
