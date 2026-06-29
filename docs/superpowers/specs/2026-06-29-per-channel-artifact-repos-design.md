@@ -96,23 +96,21 @@ The channel→repo mapping is derived, not hand-listed: `repo = "djgoku/misemacs
 One place owns the convention (a helper in `Orchestrator.Naming`), so adding a channel needs no
 new mapping entry.
 
-### 4.2 Auth (Decision D1)
+### 4.2 Auth — GitHub App (D1: decided)
 
 Cross-repo release creation/promotion needs a token with `contents:write` on the artifact repos.
-Two standard options:
+**Decision: a GitHub App** (via `actions/create-github-app-token`), installed on the
+`misemacs-emacs-*` artifact repos, with **`contents: write`** permission. No rotation, and the
+token is minted per run. (A fine-grained PAT secret with `contents:write` was the alternative;
+rejected for the yearly rotation chore.)
 
-| Option | Setup | Ongoing |
-|---|---|---|
-| **GitHub App** + `actions/create-github-app-token` (recommended) | ~20 min, install on the artifact repos (or org-wide) | none — token minted per run |
-| **Fine-grained PAT** as secret `MISEMACS_PUBLISH_TOKEN`, `contents:write` on the artifact repos | ~5 min | rotate ≤ yearly (PAT max expiry) |
+The App is installed **only on the artifact repos** with **contents-only** permission — not
+org-wide and not repo-administration — consistent with D4 (manual repo creation, §4.9) and D2
+(token scope is the sole publish boundary, §4.5).
 
-**Recommendation: GitHub App**, because (a) no rotation, and (b) org-wide install means a *new*
-artifact repo is writable with zero token edits — which is what makes "add a version = one PR"
-(§4.7) fully hands-off. The PAT is the acceptable quick-start.
-
-CI wiring: the `build` and `finalize` jobs set `GH_TOKEN` to the App/PAT token instead of
-`${{ github.token }}`. The `decide` job, which only *reads* public release assets, keeps
-`${{ github.token }}`.
+CI wiring: the `build` and `finalize` jobs mint the App token (`actions/create-github-app-token`
+with the App id + private-key secrets) and set `GH_TOKEN` to it instead of `${{ github.token }}`.
+The `decide` job, which only *reads* public release assets, keeps `${{ github.token }}`.
 
 ### 4.3 Registry — repoint each package
 
@@ -137,7 +135,10 @@ lands, the generator derives `repo_name` from the channel via the §4.1 helper.
 the right thing against the per-channel repo: the tag snapshot reads that repo's tags+releases
 (so collisions are now naturally per-channel), and `gh release create` lands there. The
 `djgoku/misemacs` `MISEMACS_PUBLISH_OK` interlock (G8) no longer fires (target is an artifact
-repo); an analogous guard can be added for the artifact repos if desired (Decision D2, §6).
+repo). **D2 (decided): no analogous artifact-repo interlock** — the GitHub App is installed only
+on the `misemacs-emacs-*` repos with contents-only permission, so the token *physically cannot*
+write elsewhere; that scope is the sole publish boundary, and a redundant env guard is omitted to
+keep the pipeline simpler.
 
 ### 4.6 `finalize` / `promote` / Latest — per-repo, simpler
 
@@ -154,23 +155,21 @@ New model — **each channel finalizes against its own repo**:
 - **`Orchestrator.Core.Latest` and the marker spec's master-only-Latest rule + non-master refuse
   guard are removed** — there is no cross-channel Latest contention to arbitrate.
 
-### 4.7 State store — per-channel manifest (Decision D3)
+### 4.7 State store — per-channel manifest (D3: decided — M1)
 
 `build-manifest.json` is the cross-run state store: `decide` (detect mode) reads it from the
 repo's **Latest release** to compare each version's `upstream_sha`/`inputs_hash`
-(`Releases.Gh.last_manifest/1`). Splitting repos moves this store. Recommended:
+(`Releases.Gh.last_manifest/1`). Splitting repos moves this store.
 
-- **M1 (per-channel manifest, recommended):** each artifact repo's Latest release carries its
-  own channel's `build-manifest.json` (that channel's state only). `decide` reads N manifests
-  (one per channel repo, via the existing repo-parameterized `last_manifest/1`) and assembles the
-  combined detect state; `finalize` writes each channel's manifest to its own repo. Fully
-  isolated; each repo self-describes. Cost: `decide` does N small `gh` fetches instead of 1.
-- **M2 (single combined manifest kept on the source repo):** assets go to artifact repos but the
-  one merged manifest stays on `djgoku/misemacs` (a dedicated state release or a committed file).
-  Smaller orchestrator change, but the manifest lives apart from the releases it describes.
+**Decision: M1 — per-channel manifest.** Each artifact repo's Latest release carries its own
+channel's `build-manifest.json` (that channel's state only). `decide` reads N manifests (one per
+channel repo, via the existing repo-parameterized `last_manifest/1` over the §4.1 channel→repo
+helper) and assembles the combined detect state; `finalize` writes each channel's manifest to its
+own repo. Fully isolated; each repo self-describes its channel. Cost: `decide` does N small `gh`
+fetches instead of 1 — negligible at the current channel count.
 
-Recommend **M1** — it matches the "each repo self-describes its channel" principle and keeps the
-`repo`-parameterized manifest functions doing one coherent thing.
+(The rejected alternative M2 kept one combined manifest on `djgoku/misemacs` separate from the
+releases it describes — smaller orchestrator change but a less coherent boundary.)
 
 ### 4.8 Relationship to the marker-independent spec
 
@@ -186,14 +185,15 @@ are reverted as part of this work. (Net: this design removes more code than it a
 2. `versions/emacs-30/`: add `mise.toml` + `pixi.toml` + `pixi.lock`. *(same as today)*
 3. Registry: add the `emacs-30` package pointing at `djgoku/misemacs-emacs-30` — or, with the
    Phase-6 generator, this is derived automatically. *(in-source)*
-4. **Bootstrap the artifact repo** — either:
-   - **Automated:** a CI guard step runs `gh repo create djgoku/misemacs-emacs-$CHANNEL --public
-     2>/dev/null || true` before first publish (needs an org-scoped App/PAT), or
-   - **Manual one-liner:** `gh repo create djgoku/misemacs-emacs-30 --public` (~10 s, once).
+4. **Bootstrap the artifact repo (D4: decided — manual):** run `gh repo create
+   djgoku/misemacs-emacs-30 --public` once (~10 s), then install the GitHub App on it (or confirm
+   the org install covers it). CI does **not** create repos — keeping the App's permission to
+   contents-only (least privilege). The registry/App settings must be in place before the first
+   `emacs-30` publish, or that cell fails loudly (and re-runs cleanly once they exist).
 
-After the first push, `emacs-30` is fully automated forever (detect → build → publish →
-finalize). With an org-wide App + the registry generator, steps 1–3 are the whole job: **one PR
-touching only the source repo**, and CI creates the artifact repo on first run.
+After that one-time setup, `emacs-30` is fully automated forever (detect → build → publish →
+finalize). The recurring per-version work is steps 1–3 (one PR touching only the source repo)
+plus the single `gh repo create` + App-install in step 4.
 
 ## 5. Definition of Done
 
@@ -210,13 +210,13 @@ touching only the source repo**, and CI creates the artifact repo on first run.
 - README updated: per-channel `aqua:` packages now live in per-channel repos; `@latest` rolls
   each channel independently; adding a version = the §4.9 flow.
 
-## 6. Open decisions (for the user / spec review)
+## 6. Decisions (resolved 2026-06-29)
 
-- **D1 — cross-repo token:** GitHub App (recommended) vs fine-grained PAT (§4.2).
-- **D2 — artifact-repo publish interlock:** add a `MISEMACS_PUBLISH_OK`-style guard for the
-  artifact repos, or rely on the token scope alone? (The G8 guard exists to prevent *accidental*
-  real-repo publishes; with dedicated buckets the risk is lower.)
-- **D3 — state store:** M1 per-channel manifest (recommended) vs M2 single combined manifest on
-  the source repo (§4.7).
-- **D4 — bootstrap:** automate `gh repo create` in CI (needs repo-create scope) vs a one-time
-  manual `gh repo create` per new channel (§4.9 step 4).
+- **D1 — cross-repo token: GitHub App** (`actions/create-github-app-token`), contents-only,
+  installed on the artifact repos. No PAT, no rotation. (§4.2)
+- **D2 — artifact-repo publish interlock: none.** The App's contents-only, artifact-repo-scoped
+  install is the sole publish boundary; no redundant `MISEMACS_PUBLISH_OK`-style env guard. (§4.5)
+- **D3 — state store: M1**, per-channel `build-manifest.json` on each artifact repo's Latest
+  release. (§4.7)
+- **D4 — bootstrap: one-time manual** `gh repo create` + App-install per new channel; CI does not
+  create repos (least privilege). (§4.9 step 4)
