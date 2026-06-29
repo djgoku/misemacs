@@ -206,12 +206,15 @@ the combined detect state; `finalize` writes each channel's manifest to its own 
 
 Two refinements from review:
 
-1. **Read the manifest from the newest release by tag-sort, not the "Latest" marker.**
-   `last_manifest/1` today fetches from the repo's Latest *marker* release. Since resolution is
-   `github_tag` and the marker is now cosmetic (§4.6), the state read must use the **same
-   sort-newest tag** to avoid coupling state to a marker a failed promote may have left stale.
-   `last_manifest/1` is changed to: list the repo's tags (sort-newest, prefix-filtered) → fetch
-   `build-manifest.json` from that release.
+1. **Read the manifest from the newest tag by sort, not the "Latest" marker — and the newest
+   tag is the SOLE authority (no scan-back).** `last_manifest/1` today fetches from the repo's
+   Latest *marker* release and self-heals by scanning older releases. Since resolution is
+   `github_tag` and the marker is now cosmetic (§4.6), the state read instead **lists the repo's
+   git tags, takes the lexical max (sort-newest)**, and fetches `build-manifest.json` from that
+   one release. If the newest tag has no/corrupt manifest, that is an `{:error, …}` (refinement 2),
+   **not** a silent fall-back to an older release's state — a per-channel repo holds one channel,
+   so the newest tag is unambiguous and authoritative, and silent scan-back could resurrect stale
+   `upstream_sha`/`inputs_hash` and mis-skip a rebuild.
 2. **Distinguish empty-repo from error (review fix).** Today `last_manifest/1` returns `nil` on
    *any* failure — release-not-found, auth error, network error, corrupt JSON — and `nil` is also
    the legitimate "first run, nothing built yet" signal (`Detect.changed?` → `:first_run`). M1
