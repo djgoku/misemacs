@@ -48,4 +48,14 @@ defmodule Orchestrator.NamingTest do
     assert "Emacs.app/Contents/Resources/enchant/bin/enchant-2" in bins
     assert "Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2" in bins
   end
+
+  test "artifact_repo composes <base>-emacs-<channel>" do
+    assert Naming.artifact_repo("djgoku/misemacs", "master") == "djgoku/misemacs-emacs-master"
+    assert Naming.artifact_repo("djgoku/misemacs", "31") == "djgoku/misemacs-emacs-31"
+  end
+
+  test "artifact_repo honors a custom base (lab)" do
+    assert Naming.artifact_repo("djgoku/misemacs-lab", "master") ==
+             "djgoku/misemacs-lab-emacs-master"
+  end
 end
