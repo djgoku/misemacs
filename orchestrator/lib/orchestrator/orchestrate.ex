@@ -41,18 +41,30 @@ defmodule Orchestrator.Orchestrate do
     }
   end
 
-  @doc "Merge fragments into prior + pick the latest tag (spec §4.4). `built_tags` oldest→newest."
-  @spec finalize_outputs(map() | nil, [map()], [String.t()]) :: %{
+  @doc """
+  Finalize ONE artifact repo: keep only fragments whose `"repo"` == `repo`, merge them
+  into `prior` (that channel's prior manifest), and pick the newest released tag.
+  Returns `built_tags` (this repo's released tags, ascending) for the manifest-attach loop.
+  """
+  @spec finalize_outputs(map() | nil, [map()], String.t()) :: %{
           manifest: map(),
-          latest_tag: String.t() | nil
+          latest_tag: String.t() | nil,
+          built_tags: [String.t()]
         }
-  def finalize_outputs(prior, fragments, built_tags) do
+  def finalize_outputs(prior, fragments, repo) do
+    mine = Enum.filter(fragments, &(Map.get(&1, "repo") == repo))
+
+    tags =
+      for f <- mine, {_v, e} <- Map.get(f, "versions", %{}), do: e["released_tag"]
+
+    tags = tags |> Enum.reject(&is_nil/1) |> Enum.sort()
+
     latest =
-      case Latest.latest_target(built_tags) do
+      case Latest.latest_target(tags) do
         {:set, tag} -> tag
         :unchanged -> nil
       end
 
-    %{manifest: Manifest.merge(prior, fragments), latest_tag: latest}
+    %{manifest: Manifest.merge(prior, mine), latest_tag: latest, built_tags: tags}
   end
 end

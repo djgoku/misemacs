@@ -30,9 +30,17 @@ defmodule Mix.Tasks.Orchestrate.Finalize do
 
   def exec(opts, deps \\ default_deps()) do
     fragments = read_fragments(opts[:fragments] || ".")
-    prior = deps.releases.(opts[:repo])
-    tags = built_tags(fragments)
-    Orchestrate.finalize_outputs(prior, fragments, tags) |> Map.put(:built_tags, tags)
+    repo = opts[:repo]
+
+    prior =
+      case deps.releases.(repo) do
+        {:ok, manifest} -> manifest
+        :empty -> nil
+        {:error, reason} ->
+          Mix.raise("finalize: cannot read prior manifest for #{repo}: #{inspect(reason)}")
+      end
+
+    Orchestrate.finalize_outputs(prior, fragments, repo)
   end
 
   defp read_fragments(dir) do
@@ -40,11 +48,6 @@ defmodule Mix.Tasks.Orchestrate.Finalize do
     |> Path.join("**/*.json")
     |> Path.wildcard()
     |> Enum.map(&(&1 |> File.read!() |> JSON.decode!()))
-  end
-
-  # built tags in fragment order (v1: single). Multi-version recency ordering = Phase-6 refinement.
-  defp built_tags(fragments) do
-    for f <- fragments, {_v, e} <- Map.get(f, "versions", %{}), do: e["released_tag"]
   end
 
   defp emit(%{manifest: manifest, latest_tag: tag, built_tags: tags}, out) do
