@@ -81,7 +81,9 @@ fi
 ENCH="$APP/Contents/Resources/enchant"
 if [ -d "$ENCH" ]; then
   echo ">> [3] enchant resolves providers from the bundle alone (dladdr self-relocation, no pixi env)"
-  "$ENCH/bin/enchant-lsmod-2"                       # lists applespell (+ hunspell) from the bundle (O6)
+  lsmod="$("$ENCH/bin/enchant-lsmod-2")"; echo "$lsmod"   # set -e fails the gate if it crashes
+  echo "$lsmod" | grep -qi applespell \
+    || { echo "FATAL: applespell provider not listed from the bundle (O6)"; exit 1; }
   echo ">> [4] applespell default: enchant-2 -l -d en_US must NOT crash (needs staged AppleSpell.config)"
   printf 'helllo\n' | "$ENCH/bin/enchant-2" -l -d en_US >/dev/null   # set -e/pipefail fail the gate on the old SEGFAULT
   echo "   enchant-2 -d en_US OK"
@@ -94,6 +96,9 @@ if [ -d "$ENCH" ]; then
   "$LN/Contents/Resources/enchant/bin/enchant-lsmod-2" >/dev/null \
     || { echo "FATAL: providers do not resolve under a symlinked launch (O9)"; exit 1; }
   echo "   symlinked launch OK"
+  # [7] is best-effort BY DESIGN: it needs network (ELPA) + Xcode CLT, which the cleanroom VM may
+  # lack, so 2>/dev/null + the else-branch downgrade it to "skipped" — it can never fail the gate.
+  # The hard enchant gates are [3] (providers) + [4] (en_US no crash) + [5] (hunspell dict).
   echo ">> [7] jinx end-to-end (best-effort: needs network for ELPA + Xcode CLT)"
   if "$APP/Contents/MacOS/Emacs" -Q --batch \
        --eval "(progn (setq package-user-dir (make-temp-file \"elpa\" t))

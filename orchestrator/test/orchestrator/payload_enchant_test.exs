@@ -1,6 +1,14 @@
+# A tool stub that reports no Mach-O dependencies, so stage_copy/3's closure walk is a no-op.
+# stage_copy only calls `tool.deps/1`, letting the copy-only staging logic be exercised on plain
+# files with no clang/Mach-O fixtures (the install_name/sign IO is relocate/2's job, not stage_copy).
+defmodule Orchestrator.Payload.EnchantTest.NoDepsTool do
+  def deps(_path), do: []
+end
+
 defmodule Orchestrator.Payload.EnchantTest do
   use ExUnit.Case, async: true
   alias Orchestrator.Payload.Enchant
+  alias Orchestrator.Payload.EnchantTest.NoDepsTool
 
   test "pc_contents is ${pcfiledir}-relocatable and injects an rpath" do
     pc = Enchant.pc_contents()
@@ -58,6 +66,24 @@ defmodule Orchestrator.Payload.EnchantTest do
 
   test "ordering_contents makes applespell default" do
     assert Enchant.ordering_contents() == "*:applespell,hunspell\n"
+  end
+
+  test "stage_copy raises if the applespell provider is staged without AppleSpell.config" do
+    t = Path.join(System.tmp_dir!(), "ench-noconf-#{System.unique_integer([:positive])}")
+    lib = Path.join(t, "conda/lib")
+    File.mkdir_p!(Path.join(lib, "enchant-2"))
+    app = Path.join(t, "Emacs.app")
+    File.mkdir_p!(Path.join([app, "Contents", "Resources", "site-lisp"]))
+    on_exit(fn -> File.rm_rf!(t) end)
+
+    # Plain (non-Mach-O) stand-ins: stage_copy copies these and walks deps via the stub tool.
+    # No AppleSpell.config is written under conda/share — so staging must fail loudly.
+    File.write!(Path.join(lib, "libenchant-2.2.dylib"), "stub")
+    File.write!(Path.join(lib, "enchant-2/enchant_applespell.so"), "stub")
+
+    assert_raise RuntimeError, ~r/AppleSpell\.config is missing/, fn ->
+      Enchant.stage_copy(app, Path.join(t, "conda"), NoDepsTool)
+    end
   end
 
   @tag :macos
@@ -191,12 +217,8 @@ defmodule Orchestrator.Payload.EnchantTest do
     # AppleSpell.config copied from the conda prefix → applespell can claim en_US (no crash).
     assert File.read!(Path.join(ench, "share/enchant-2/AppleSpell.config")) =~ "en_US"
 
-    # Bundled en_US hunspell dict (the "working hunspell option") staged at the XDG location
-    # (<prefix>/share/hunspell), discoverable via XDG_DATA_DIRS=<prefix>/share.
-    assert File.exists?(Path.join(ench, "share/hunspell/en_US.dic"))
-    assert File.exists?(Path.join(ench, "share/hunspell/en_US.aff"))
-    # The permissive-license notice ships beside the data files.
-    assert File.exists?(Path.join(ench, "share/hunspell/README_en_US.txt"))
+    # No Hunspell dictionaries are bundled (applespell default; hunspell is bring-your-own).
+    refute File.dir?(Path.join(ench, "share/hunspell"))
 
     # R9: each staged CLI is executable.
     for b <- ["enchant-2", "enchant-lsmod-2", "pkg-config"] do
