@@ -1,42 +1,54 @@
 defmodule Orchestrator.Releases.Gh do
   @moduledoc """
-  Default `Orchestrator.Releases` — fetch `build-manifest.json` from the `latest` release via
-  `gh`; if absent/corrupt, scan the most-recent releases (newest first). `nil` when none.
+  Default `Orchestrator.Releases` — fetch `build-manifest.json` from the lexical-newest git
+  tag in the per-channel release repo via `gh`. Three-way result:
+
+    * `{:ok, manifest}`   — newest tag exists and carries a valid manifest
+    * `:empty`            — repo is reachable but has no tags (genuine first run)
+    * `{:error, reason}`  — repo unreachable / auth failure / newest tag has no/corrupt manifest
+
+  The lexical-newest tag is the sole authority (matches aqua's `github_tag` resolution). No
+  scan-back to older tags: if the newest tag lacks a manifest, the caller must treat it as an
+  error rather than silently falling back to stale state.
   """
   @behaviour Orchestrator.Releases
   @asset "build-manifest.json"
-  @scan 10
 
   @impl true
   def last_manifest(repo) do
-    [latest_tag(repo) | recent_tags(repo)]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-    |> Enum.find_value(&fetch(repo, &1))
+    classify(list_tags(repo), &fetch(repo, &1))
   end
 
-  defp latest_tag(repo) do
-    case gh(["release", "view", "--repo", repo, "--json", "tagName", "--jq", ".tagName"]) do
-      {out, 0} -> trim_nil(out)
-      _ -> nil
+  @doc """
+  Pure decision over a `list_tags` result + a `fetch.(tag)` fun. ONLY the lexical-newest
+  tag is authoritative (matches aqua's `github_tag` resolution; the per-channel repo holds
+  one channel so the max is unambiguous):
+    * `{:error, reason}`              -> `{:error, reason}` (repo unreachable/auth failure)
+    * `{:ok, []}`                     -> `:empty` (reachable, no releases = first run)
+    * `{:ok, tags}`, newest has mfst  -> `{:ok, manifest}`
+    * `{:ok, tags}`, newest lacks it  -> `{:error, {:no_manifest_on_newest, tag}}`
+  """
+  @spec classify({:ok, [String.t()]} | {:error, term()}, (String.t() -> map() | nil)) ::
+          {:ok, map()} | :empty | {:error, term()}
+  def classify({:error, reason}, _fetch), do: {:error, reason}
+  def classify({:ok, []}, _fetch), do: :empty
+
+  def classify({:ok, tags}, fetch) do
+    newest = Enum.max(tags)
+
+    case fetch.(newest) do
+      nil -> {:error, {:no_manifest_on_newest, newest}}
+      manifest -> {:ok, manifest}
     end
   end
 
-  defp recent_tags(repo) do
-    case gh([
-           "release",
-           "list",
-           "--repo",
-           repo,
-           "--limit",
-           "#{@scan}",
-           "--json",
-           "tagName",
-           "--jq",
-           ".[].tagName"
-         ]) do
-      {out, 0} -> out |> String.split("\n", trim: true) |> Enum.map(&String.trim/1)
-      _ -> []
+  # IO: list the repo's git tags (newest page). {:ok, [name]} on success (possibly empty),
+  # {:error, _} on gh failure. The GitHub tags API returns the newest 100; the per-channel
+  # repo's global-newest is therefore present and `classify` takes the lexical max.
+  defp list_tags(repo) do
+    case gh(["api", "repos/#{repo}/tags?per_page=100", "--jq", ".[].name"]) do
+      {out, 0} -> {:ok, out |> String.split("\n", trim: true) |> Enum.map(&String.trim/1)}
+      {out, _} -> {:error, String.trim(out)}
     end
   end
 
@@ -62,13 +74,6 @@ defmodule Orchestrator.Releases.Gh do
     case JSON.decode(json) do
       {:ok, %{"versions" => _} = m} -> m
       _ -> nil
-    end
-  end
-
-  defp trim_nil(s) do
-    case String.trim(s) do
-      "" -> nil
-      t -> t
     end
   end
 
