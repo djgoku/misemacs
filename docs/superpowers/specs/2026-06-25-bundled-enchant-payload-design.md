@@ -173,7 +173,10 @@ thin `pipeline/stage-enchant` wrapper, invoked **after build, before the deep si
 1. Copy enchant's closure from `$CONDA_PREFIX/lib` into `enchant/lib/` — `libenchant-2.2.dylib`,
    `lib/enchant-2/enchant_*.so`, and the transitive **foreign** closure of each (glib,
    hunspell, …) resolved with the *same* `Orchestrator.Macho` primitives the Emacs relocator
-   uses, but with **bundle root = `enchant/lib/`** instead of `Contents/Frameworks`.
+   uses, but with **bundle root = `enchant/lib/`** instead of `Contents/Frameworks`. **Also
+   stage the unversioned `libenchant-2.dylib` symlink** alongside `libenchant-2.2.dylib` —
+   jinx's `cc … -lenchant-2` link step needs it; staging only the versioned dylib fails with
+   *library 'enchant-2' not found* (spike-A).
 2. Copy `include/enchant-2/*.h`, `lib/pkgconfig/enchant-2.pc`, `bin/enchant-2`.
 3. Set ids on staged dylibs → `@rpath/<base>`; the providers and CLI get a depth-correct
    `@loader_path` rpath into `enchant/lib/` (CLI is at `enchant/bin`, rpath
@@ -312,14 +315,15 @@ Extend the existing gates rather than inventing a parallel harness:
   deps/rpaths; every `@rpath/<base>` resolvable within `enchant/lib`) **plus a per-file
   `codesign --verify --strict` on every enchant Mach-O** (the app-level `--deep` verify
   skips `Resources/` — §8, spike-validated).
-- **Functional smoke (build host):** `…/enchant/bin/enchant-2 -list-dicts` (and
-  `enchant-lsmod-2`, also installed) lists the applespell + hunspell providers.
+- **Functional smoke (build host):** `…/enchant/bin/enchant-lsmod-2` lists the applespell +
+  hunspell providers (spike-A: `enchant-2 -list-dicts` is **not** valid — `enchant-2`'s flags
+  are `-a|-l|-h|-v`; `enchant-lsmod-2` is the module/provider lister).
 - **Build-prefix leak gate (spike-D):** `strings` over every enchant Mach-O *and* the
   `.pc` greps for the conda build prefix → **fail if found**. A cheap catch-all for any
   relocation hole the otool gate can't see (embedded config/ordering paths, etc.).
 - **Cleanroom (pregate macOS VM) — extend `mise run cleanroom`:** with the pixi env moved
   aside (proving no build-env leakage), run:
-  1. `enchant-2 -list-dicts` resolves providers from the bundle alone.
+  1. `enchant-lsmod-2` resolves providers from the bundle alone.
   2. A jinx end-to-end: `package-install jinx`, force module compile, spell-check a known
      word — proving headers + shim `pkg-config` + link + runtime libenchant resolution all
      work with no Homebrew/system enchant. (Requires CLT in the VM — see §5.2.)
@@ -343,6 +347,8 @@ Extend the existing gates rather than inventing a parallel harness:
 | O7 | Phase-0 prerequisite: feedstock published to a channel; channel name | §2, §6 |
 | O8 | ✅ spike-resolved: ordering at `share/enchant-2/` (or `etc/enchant-2/`), not `share/enchant/` | §13 |
 | O9 | `dladdr` symlink-path semantics under mise/aqua symlinked installs — test symlinked launch | §14 |
+| A | ✅ spike-validated: `.pc` rewrite + shim → jinx compiles/links/loads vs. a relocated bundle; needs unversioned symlink | §8–§10 |
+| B | ⏸ Phase-0-gated: stock conda-forge `enchant` ships **no provider `.so`** — provider/self-reloc needs the feedstock | §8, §2 |
 
 ## 16. Implementation outline (for the plan, not this spec)
 
