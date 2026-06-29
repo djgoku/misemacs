@@ -17,16 +17,34 @@ defmodule Orchestrator.Relocate do
   def run(app, build_libdir, tool \\ Orchestrator.Macho.Otool) do
     app = Path.expand(app)
     fw = Path.join([app, "Contents", "Frameworks"])
+    ench = Path.join(app, Orchestrator.Payload.Enchant.enchant_rel())
     File.mkdir_p!(fw)
 
     copy_closure(machos(app, tool), fw, build_libdir, tool)
     Enum.each(machos(app, tool), &rewrite(&1, fw, tool))
+
+    # enchant payload (if staged): relocate its subtree BEFORE the single deep sign so the deep
+    # sign covers it too — but its Mach-Os are ALSO per-file signed by the payload (spike-1:
+    # --deep skips Resources/). No-op when the payload was not staged.
+    if File.dir?(ench), do: Orchestrator.Payload.Enchant.relocate(app, tool)
+
     tool.sign_bundle(app)
 
     case tool.verify_bundle(app) do
       :ok ->
         IO.puts("sign_gate: PASS (#{app} signature valid)")
-        gate(app, fw, tool)
+
+        enchant_result =
+          if File.dir?(ench) do
+            Orchestrator.Payload.Enchant.verify(app, Path.dirname(build_libdir), tool)
+          else
+            :ok
+          end
+
+        case enchant_result do
+          {:error, _} = e -> e
+          :ok -> gate(app, fw, tool)
+        end
 
       {:error, reason} ->
         IO.puts("sign_gate: FAIL — #{reason}")
@@ -35,8 +53,11 @@ defmodule Orchestrator.Relocate do
   end
 
   defp machos(app, tool) do
+    enchant = Path.join([app, Orchestrator.Payload.Enchant.enchant_rel()]) <> "/"
+
     Path.join(app, "**")
     |> Path.wildcard()
+    |> Enum.reject(&String.starts_with?(&1, enchant))
     |> Enum.filter(&File.regular?/1)
     |> Enum.filter(&tool.macho?/1)
   end
