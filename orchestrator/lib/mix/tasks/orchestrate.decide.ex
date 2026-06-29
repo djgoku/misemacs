@@ -44,7 +44,8 @@ defmodule Mix.Tasks.Orchestrate.Decide do
     {states, manifest} =
       if mode == "detect" do
         clt = deps.toolchain.()
-        {current_states(versions, root, clt, deps.upstream), deps.releases.(fetch!(opts, :repo))}
+        {current_states(versions, root, clt, deps.upstream),
+         combined_manifest(versions, artifact_base(opts), deps.releases)}
       else
         {%{}, nil}
       end
@@ -100,5 +101,27 @@ defmodule Mix.Tasks.Orchestrate.Decide do
   # (djgoku/misemacs -> djgoku/misemacs-emacs-<channel>). Default keeps non-detect modes working.
   defp artifact_base(opts) do
     System.get_env("MISEMACS_ARTIFACT_BASE") || opts[:repo] || "djgoku/misemacs"
+  end
+
+  # Read each DISTINCT channel's manifest from its artifact repo; merge :ok ones'
+  # "versions" maps into one combined manifest (the shape Decide.plan consumes via
+  # previous_state). :empty -> no entry (first run for that channel). :error -> abort.
+  defp combined_manifest(versions, base, read) do
+    versions
+    |> Enum.map(& &1.channel)
+    |> Enum.uniq()
+    |> Enum.reduce(%{"schema" => 1, "versions" => %{}}, fn channel, acc ->
+      repo = Orchestrator.Naming.artifact_repo(base, channel)
+
+      case read.(repo) do
+        {:ok, %{"versions" => v}} -> update_in(acc, ["versions"], &Map.merge(&1, v))
+        :empty -> acc
+        {:error, reason} -> Mix.raise("decide preflight: #{repo} unreadable: #{inspect(reason)}")
+      end
+    end)
+    |> case do
+      %{"versions" => v} when map_size(v) == 0 -> nil
+      combined -> combined
+    end
   end
 end
