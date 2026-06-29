@@ -1,0 +1,64 @@
+--- a/providers/applespell_checker.mm
++++ b/providers/applespell_checker.mm
+@@ -300,37 +300,43 @@
+ {
+ 	@autoreleasepool {
+ 		// NSLog (@"appleSpell_provider_request_dict");
+-		AppleSpellChecker * checker = static_cast<AppleSpellChecker *>(me->user_data);
+-		EnchantDict * dict = enchant_broker_new_dict (me->owner);
++		if (!me || !tag)
++			return 0;
+ 
+-		if (!me || !tag || !checker || !dict)
+-			{
+-				return 0;
+-			}
++		AppleSpellChecker * checker = static_cast<AppleSpellChecker *>(me->user_data);
++		if (!checker)
++			return 0;
+ 
+-		dict->check            = appleSpell_dict_check;
+-		dict->suggest          = appleSpell_dict_suggest;
++		/* Resolve the AppleSpell language BEFORE creating the dict.  enchant_broker_new_dict()
++		 * registers the new EnchantDict in the broker's hash table; the previous code created the
++		 * dict first and then g_free()'d it when AppleSpell could not map the tag, leaving a freed,
++		 * ref-counted dict in that table and later crashing in enchant_dict_finalize (reachable for
++		 * tags AppleSpell cannot map, e.g. a bare "en" with no region).  Mirror the hunspell/aspell
++		 * providers: only create the dict once success is guaranteed. */
++		NSString * dictionaryName = checker->requestDictionary (tag);
++		if (!dictionaryName)
++			return 0;
+ 
+ 		AppleSpellDictionary * ASD = g_new0 (AppleSpellDictionary, 1);
+ 		if (!ASD)
+-			{
+-				g_free (dict);
+-				return 0;
+-			}
+-
++			return 0;
++
+ 		ASD->AppleSpell     = checker;
+-		ASD->DictionaryName = checker->requestDictionary (tag);
++		ASD->DictionaryName = dictionaryName;
++		[ASD->DictionaryName retain];
+ 
+-		if (!ASD->DictionaryName)
++		EnchantDict * dict = enchant_broker_new_dict (me->owner);
++		if (!dict)
+ 			{
++				[ASD->DictionaryName release];
+ 				g_free (ASD);
+-				g_free (dict);
+ 				return 0;
+ 			}
+ 
+-		[ASD->DictionaryName retain];
++		dict->check            = appleSpell_dict_check;
++		dict->suggest          = appleSpell_dict_suggest;
++		dict->user_data        = (void *) ASD;
+ 		// NSLog (@"appleSpell_provider_request_dict: providing dictionary \"%@\"", ASD->DictionaryName);
+-		dict->user_data = (void *) ASD;
+ 		return dict;
+ 	}
+ }
