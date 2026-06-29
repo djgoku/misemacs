@@ -23,6 +23,26 @@ defmodule Orchestrator.Payload.EnchantTest do
     assert sh =~ "exit 1"
   end
 
+  test "pkgconfig_shim accepts enchant-2 and refuses any other package" do
+    t = Path.join(System.tmp_dir!(), "shim-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(t)
+    shim = Path.join(t, "pkg-config")
+    on_exit(fn -> File.rm_rf!(t) end)
+    File.write!(shim, Enchant.pkgconfig_shim())
+    File.chmod!(shim, 0o755)
+
+    # Accepted: enchant-2 query exits 0 and emits -lenchant-2.
+    {out, status} = System.cmd(shim, ["--cflags", "--libs", "enchant-2"], stderr_to_stdout: true)
+    assert status == 0, "expected exit 0 for enchant-2, got #{status}; output: #{out}"
+    assert out =~ "-lenchant-2"
+
+    # Refused: any other package exits non-zero (O2 refusal path).
+    {_out, refused_status} =
+      System.cmd(shim, ["--cflags", "--libs", "some-other-pkg"], stderr_to_stdout: true)
+
+    assert refused_status != 0, "expected non-zero exit for some-other-pkg, got 0"
+  end
+
   test "site_start_el is discovery-only, jinx-scoped, and self-heals stale rpaths" do
     el = Enchant.site_start_el()
     assert el =~ "with-eval-after-load 'jinx"
@@ -58,6 +78,100 @@ defmodule Orchestrator.Payload.EnchantTest do
 
     assert :ok = Orchestrator.Macho.Otool.sign_file(dy)
     assert :ok = Orchestrator.Macho.Otool.verify_file(dy)
+  end
+
+  @tag :macos
+  test "leak_check catches a build-prefix string planted in a staged file" do
+    tool = Orchestrator.Macho.Otool
+    t = Path.join(System.tmp_dir!(), "ench-leak-#{System.unique_integer([:positive])}")
+    conda = Path.join(t, "conda")
+    libdir = Path.join(conda, "lib")
+    incdir = Path.join(conda, "include/enchant-2")
+    File.mkdir_p!(Path.join(libdir, "enchant-2"))
+    File.mkdir_p!(incdir)
+    app = Path.join(t, "Emacs.app")
+    File.mkdir_p!(Path.join([app, "Contents", "Resources", "site-lisp"]))
+    on_exit(fn -> File.rm_rf!(t) end)
+    cl = fn args -> {_, 0} = System.cmd("clang", args, stderr_to_stdout: true) end
+
+    # Minimal synthetic prefix: one leaf dylib + libenchant-2.2 + one provider + header + CLIs.
+    File.write!(Path.join(t, "g.c"), "int gstub(void){return 1;}\n")
+    File.write!(Path.join(t, "e.c"), "int gstub(void); int enchant_v(void){return gstub()+1;}\n")
+    File.write!(Path.join(t, "p.c"), "int enchant_v(void); int prov(void){return enchant_v();}\n")
+
+    cl.([
+      "-dynamiclib",
+      "-install_name",
+      "@rpath/libglibstub.dylib",
+      "-Wl,-headerpad_max_install_names",
+      Path.join(t, "g.c"),
+      "-o",
+      Path.join(libdir, "libglibstub.dylib")
+    ])
+
+    cl.([
+      "-dynamiclib",
+      "-install_name",
+      "@rpath/libenchant-2.2.dylib",
+      "-Wl,-headerpad_max_install_names",
+      "-L",
+      libdir,
+      "-lglibstub",
+      "-Wl,-rpath," <> libdir,
+      Path.join(t, "e.c"),
+      "-o",
+      Path.join(libdir, "libenchant-2.2.dylib")
+    ])
+
+    File.ln_s!("libenchant-2.2.dylib", Path.join(libdir, "libenchant-2.dylib"))
+
+    cl.([
+      "-bundle",
+      "-Wl,-headerpad_max_install_names",
+      "-L",
+      libdir,
+      "-lenchant-2",
+      "-Wl,-rpath," <> libdir,
+      Path.join(t, "p.c"),
+      "-o",
+      Path.join([libdir, "enchant-2", "enchant_applespell.so"])
+    ])
+
+    File.write!(Path.join(incdir, "enchant.h"), "int enchant_v(void);\n")
+    File.mkdir_p!(Path.join(conda, "bin"))
+
+    for b <- ["enchant-2", "enchant-lsmod-2"] do
+      File.write!(
+        Path.join(t, "#{b}.c"),
+        "int enchant_v(void); int main(void){return enchant_v()-2;}\n"
+      )
+
+      cl.([
+        "-Wl,-headerpad_max_install_names",
+        "-L",
+        libdir,
+        "-lenchant-2",
+        "-Wl,-rpath," <> libdir,
+        Path.join(t, "#{b}.c"),
+        "-o",
+        Path.join([conda, "bin", b])
+      ])
+    end
+
+    # Stage + relocate so Mach-Os are signed and gate/sig checks pass.
+    assert :ok = Orchestrator.Payload.Enchant.stage_copy(app, conda, tool)
+    assert :ok = Orchestrator.Payload.Enchant.relocate(app, tool)
+
+    # Plant the conda_prefix string into the staged .pc (a text file, invisible to machos/2).
+    ench = Path.join(app, "Contents/Resources/enchant")
+    pc_path = Path.join(ench, "lib/pkgconfig/enchant-2.pc")
+    File.write!(pc_path, File.read!(pc_path) <> "\n# leak: #{conda}\n")
+
+    # verify/3 must detect the leak and fail.
+    assert {:error, {:build_prefix_leak, leaked_paths}} =
+             Orchestrator.Payload.Enchant.verify(app, conda, tool)
+
+    assert pc_path in leaked_paths
   end
 
   @tag :macos
