@@ -391,6 +391,8 @@ git commit -m "feat(orchestrator): Core.Latest selects newest by sort (github_ta
 
 ## Task 5: `Releases` three-way + sort-newest read (newest tag authoritative)
 
+> **Superseded as implemented:** the "newest tag only, NO scan-back" rule below deadlocks the first real run — a release is published *before* finalize attaches its manifest, so the newest tag legitimately has none yet (caught on the phase5-lab e2e). Shipped behavior: bounded newest-first scan-back (10 tags), `:empty` if none carries a manifest; `{:error, …}` only when the tag LIST fetch fails. See design §4.7 and `Orchestrator.Releases.Gh.classify/2`.
+
 `last_manifest/1` must (a) distinguish a reachable-but-empty repo (genuine first run) from an unreachable/auth-failed one (must fail loudly), and (b) read state from the **lexical-newest tag only** — if that newest tag has no/corrupt manifest, return `{:error, …}` (NO silent scan-back to older state). Split IO from a pure classifier so it's unit-testable. **This task precedes Tasks 6 and 7, which consume the three-way result.**
 
 **Files:**

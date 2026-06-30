@@ -1,15 +1,17 @@
 defmodule Orchestrator.Releases.Gh do
   @moduledoc """
-  Default `Orchestrator.Releases` — fetch `build-manifest.json` from the lexical-newest git
-  tag in the per-channel release repo via `gh`. Three-way result:
+  Default `Orchestrator.Releases` — fetch `build-manifest.json` from the per-channel release
+  repo via `gh`, scanning tags newest-first (lexical-desc, matches aqua's `github_tag`
+  resolution). Three-way result:
 
-    * `{:ok, manifest}`   — newest tag exists and carries a valid manifest
-    * `:empty`            — repo is reachable but has no tags (genuine first run)
-    * `{:error, reason}`  — repo unreachable / auth failure / newest tag has no/corrupt manifest
+    * `{:ok, manifest}`   — a recent tag carries a valid manifest (first hit of the scan)
+    * `:empty`            — repo reachable but no tags, or none of the newest `@scan_back`
+                            carries a manifest (first run / only in-flight releases)
+    * `{:error, reason}`  — the tag LIST fetch failed (repo unreachable / auth failure)
 
-  The lexical-newest tag is the sole authority (matches aqua's `github_tag` resolution). No
-  scan-back to older tags: if the newest tag lacks a manifest, the caller must treat it as an
-  error rather than silently falling back to stale state.
+  The bounded scan-back exists because a release is published BEFORE finalize attaches its
+  manifest: the newest tag may legitimately have none yet, and treating that as an error
+  would deadlock the run that published it (see `classify/2` and design §4.7).
   """
   @behaviour Orchestrator.Releases
   @asset "build-manifest.json"
@@ -19,14 +21,21 @@ defmodule Orchestrator.Releases.Gh do
     classify(list_tags(repo), &fetch(repo, &1))
   end
 
+  # Bound the newest-first scan: a healthy repo's newest tag carries the manifest (1 fetch);
+  # this only scans further past manifest-LESS in-flight releases (published this run, manifest
+  # attached later by finalize) — never the whole list.
+  @scan_back 10
+
   @doc """
-  Pure decision over a `list_tags` result + a `fetch.(tag)` fun. ONLY the lexical-newest
-  tag is authoritative (matches aqua's `github_tag` resolution; the per-channel repo holds
-  one channel so the max is unambiguous):
-    * `{:error, reason}`              -> `{:error, reason}` (repo unreachable/auth failure)
-    * `{:ok, []}`                     -> `:empty` (reachable, no releases = first run)
-    * `{:ok, tags}`, newest has mfst  -> `{:ok, manifest}`
-    * `{:ok, tags}`, newest lacks it  -> `{:error, {:no_manifest_on_newest, tag}}`
+  Pure decision over a `list_tags` result + a `fetch.(tag)` fun. Scans the newest tags first
+  (lexical-desc) and returns the FIRST one that carries a `build-manifest.json` — tolerating
+  manifest-less releases (a release is published BEFORE finalize attaches its manifest, so the
+  lexical-newest tag during/after a run may legitimately have none yet):
+    * `{:error, reason}`        -> `{:error, reason}` (the LIST fetch failed = repo unreachable/auth)
+    * `{:ok, []}`               -> `:empty` (reachable, no releases = first run)
+    * `{:ok, tags}`, a recent tag has a manifest -> `{:ok, manifest}`
+    * `{:ok, tags}`, none of the newest #{@scan_back} has one -> `:empty` (treat as no-prior /
+      first-run; callers rebuild, which self-heals — no hard deadlock on a manifest-less release)
   """
   @spec classify({:ok, [String.t()]} | {:error, term()}, (String.t() -> map() | nil)) ::
           {:ok, map()} | :empty | {:error, term()}
@@ -34,10 +43,12 @@ defmodule Orchestrator.Releases.Gh do
   def classify({:ok, []}, _fetch), do: :empty
 
   def classify({:ok, tags}, fetch) do
-    newest = Enum.max(tags)
-
-    case fetch.(newest) do
-      nil -> {:error, {:no_manifest_on_newest, newest}}
+    tags
+    |> Enum.sort(:desc)
+    |> Enum.take(@scan_back)
+    |> Enum.find_value(fn tag -> fetch.(tag) end)
+    |> case do
+      nil -> :empty
       manifest -> {:ok, manifest}
     end
   end

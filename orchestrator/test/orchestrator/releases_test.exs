@@ -25,19 +25,32 @@ defmodule Orchestrator.Releases.GhTest do
     assert Gh.classify({:ok, []}, fn _tag -> raise "should not fetch" end) == :empty
   end
 
-  test "classify: returns ONLY the lexical-newest tag's manifest" do
+  test "classify: tries newest tag first" do
     fetched =
       fn
         "emacs-31-2026-06-29" -> %{"versions" => %{"emacs-31" => %{}}}
-        other -> flunk("only the newest tag should be fetched, got #{other}")
+        other -> flunk("newest tag has a manifest, should not have scanned to #{other}")
       end
 
     assert {:ok, %{"versions" => _}} =
              Gh.classify({:ok, ["emacs-31-2026-06-28", "emacs-31-2026-06-29"]}, fetched)
   end
 
-  test "classify: newest tag lacks a manifest => :error (no scan-back to older state)" do
-    assert {:error, _} =
-             Gh.classify({:ok, ["emacs-31-2026-06-28", "emacs-31-2026-06-29"]}, fn _ -> nil end)
+  test "classify: scans back past a manifest-less newest (in-flight release) to an older manifest" do
+    # The newest tag is published this run but its manifest is attached later by finalize,
+    # so the newest may legitimately lack one — fall back to the previous release's state.
+    fetched =
+      fn
+        "emacs-31-2026-06-29" -> nil
+        "emacs-31-2026-06-28" -> %{"versions" => %{"emacs-31" => %{"upstream_sha" => "old"}}}
+      end
+
+    assert {:ok, %{"versions" => %{"emacs-31" => %{"upstream_sha" => "old"}}}} =
+             Gh.classify({:ok, ["emacs-31-2026-06-28", "emacs-31-2026-06-29"]}, fetched)
+  end
+
+  test "classify: tags exist but none has a manifest => :empty (no-prior; self-heals, no deadlock)" do
+    assert Gh.classify({:ok, ["emacs-31-2026-06-28", "emacs-31-2026-06-29"]}, fn _ -> nil end) ==
+             :empty
   end
 end
