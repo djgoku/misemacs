@@ -38,6 +38,23 @@ mise exec -- Emacs --version
 
 mise verifies the downloaded asset against GitHub's release digest. (The first release appears once the daily workflow has run — see *How it works* below.)
 
+** Per-channel artifact repos
+
+Each channel publishes its releases to its *own* GitHub repo:
+
+| aqua package                      | artifact repo                       |
+|-----------------------------------+-------------------------------------|
+| =aqua:djgoku/misemacs-emacs-master= | [[https://github.com/djgoku/misemacs-emacs-master][=djgoku/misemacs-emacs-master=]]      |
+| =aqua:djgoku/misemacs-emacs-31=     | [[https://github.com/djgoku/misemacs-emacs-31][=djgoku/misemacs-emacs-31=]]          |
+
+The aqua *package names* are unchanged; only the underlying repo each package reads from has changed. The registry itself ([[aqua/registry.yaml][=aqua/registry.yaml=]]) still lives here in =djgoku/misemacs=, and =MISE_AQUA_REGISTRY_URL= continues to point at it.
+
+*Why separate repos?* mise (via aqua) fetches only the first ~100 entries of a repo's tag/release list. If both channels shared a single repo, a high-frequency channel (e.g. =master=, built daily) would eventually push a low-frequency channel's tags off that page, making older — or even all — versions of that channel uninstallable. One repo per channel eliminates the interference.
+
+*=@latest= is marker-independent.* The registry uses =version_source: github_tag=, so =@latest= and =mise up= always resolve to the newest *tag* in the channel's own repo — independent of which release GitHub marks as "Latest". A =@latest= pin rolls automatically with =mise up=; no =--bump= is needed. =--bump= is only required when moving from one exact dated pin to another.
+
+*Fresh-channel caveat.* A newly-added channel has no installable version until its first daily build publishes — its artifact repo starts empty.
+
 * Spell-checking (bundled enchant)
 
 Every =Emacs.app= bundles [[https://github.com/AbiWord/enchant][enchant]] under =Contents/Resources/enchant/= as a self-contained, relocated sub-prefix (its own =libenchant=, the Hunspell + AppleSpell providers, and their dylib closure). enchant self-relocates at load time (a =dladdr= constructor), so it resolves entirely from inside the app — no Homebrew, no system enchant.
@@ -117,14 +134,22 @@ misemacs/
 
 * Adding a build
 
-A "build" is a *version*: one row in =versions.toml= plus a =versions/<name>/= directory holding =mise.toml=, =pixi.toml=, and =pixi.lock=. There is no code to change — the orchestrator and the daily workflow pick it up automatically.
+A "build" is a *version*: one row in =versions.toml= plus a =versions/<name>/= directory holding =mise.toml=, =pixi.toml=, and =pixi.lock=. Adding a new channel also requires a one-time artifact-repo setup — after that, the daily pipeline builds and publishes it automatically.
 
-=emacs-31= is a worked example. It was added as exactly:
+=emacs-31= is a worked example. The full steps are:
 
-1. a row in [[versions.toml][=versions.toml=]] (=ref = "emacs-31"=, =channel = "31"= → tag =emacs-31-YYYY-MM-DD=), and
-2. a [[versions/emacs-31/][=versions/emacs-31/=]] directory copied from =master/= with =EMACS_REF= flipped to =emacs-31= — the =pixi.lock= is reused verbatim, since the build dependencies don't depend on the Emacs version.
+1. Add a row to [[versions.toml][=versions.toml=]] (=ref = "emacs-31"=, =channel = "31"= → tag =emacs-31-YYYY-MM-DD=).
+2. Add a [[versions/emacs-31/][=versions/emacs-31/=]] directory copied from =master/= with =EMACS_REF= flipped to =emacs-31=. The =pixi.lock= is reused verbatim since build dependencies don't depend on the Emacs version.
+3. Add a package entry to [[aqua/registry.yaml][=aqua/registry.yaml=]] pointing at =repo_name: misemacs-emacs-<channel>= (copy an existing entry and adjust =name=, =repo_name=, =description=, and =version_prefix=).
+4. Create the artifact repo (one-time). It MUST have an initial commit — GitHub returns =HTTP 422 "Repository is empty"= when you try to create the first release/tag on a repo with no default branch, so pass =--add-readme=:
+   #+begin_src sh
+   gh repo create djgoku/misemacs-emacs-<channel> --public --add-readme
+   #+end_src
+5. Install the publishing GitHub App on the new artifact repo so the daily workflow can push releases to it.
 
-The layout contract is enforced by the =version_layout_test= (every =versions.toml= row must have its three input files committed), so a malformed addition fails loudly. A fuller step-by-step walkthrough is planned.
+After step 5, the daily pipeline detects the new version, builds it, and publishes the first release to =djgoku/misemacs-emacs-<channel>= — at which point =mise use aqua:djgoku/misemacs-emacs-<channel>@latest= becomes installable.
+
+The layout contract is enforced by the =version_layout_test= (every =versions.toml= row must have its three input files committed), so a malformed addition fails loudly.
 
 * Development
 
