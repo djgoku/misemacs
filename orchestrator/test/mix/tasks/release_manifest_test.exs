@@ -87,6 +87,19 @@ defmodule Mix.Tasks.Release.ManifestTest do
     assert_raise File.Error, fn -> run(root, out) end
   end
 
+  test "blank MISEMACS_ARTIFACT_BASE falls back to default (not '-emacs-master')", %{
+    root: root,
+    out: out
+  } do
+    System.put_env("MISEMACS_ARTIFACT_BASE", "")
+
+    on_exit(fn -> System.delete_env("MISEMACS_ARTIFACT_BASE") end)
+
+    run(root, out)
+    manifest = out |> File.read!() |> JSON.decode!()
+    assert manifest["repo"] == "djgoku/misemacs-emacs-master"
+  end
+
   test "fragment stamps channel (from versions.toml) and artifact repo at top level" do
     dir = Path.join(System.tmp_dir!(), "frag-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)

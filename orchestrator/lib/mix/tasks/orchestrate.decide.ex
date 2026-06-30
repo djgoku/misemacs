@@ -100,7 +100,16 @@ defmodule Mix.Tasks.Orchestrate.Decide do
   # Artifact-repo base: env override (lab/CI) else the SOURCE repo string itself
   # (djgoku/misemacs -> djgoku/misemacs-emacs-<channel>). Default keeps non-detect modes working.
   defp artifact_base(opts) do
-    System.get_env("MISEMACS_ARTIFACT_BASE") || opts[:repo] || "djgoku/misemacs"
+    env_base() || opts[:repo] || "djgoku/misemacs"
+  end
+
+  # Treat blank MISEMACS_ARTIFACT_BASE like unset (mirrors bash ${VAR:-default} semantics).
+  defp env_base do
+    case System.get_env("MISEMACS_ARTIFACT_BASE") do
+      nil -> nil
+      "" -> nil
+      v -> v
+    end
   end
 
   # Read each DISTINCT channel's manifest from its artifact repo; merge :ok ones'

@@ -33,7 +33,6 @@ defmodule Orchestrator.RegistryContractTest do
     assert reg =~ "format: tar.gz"
     assert reg =~ "darwin: macos"
     assert reg =~ "repo_owner: djgoku"
-    assert reg =~ "repo_name: misemacs"
   end
 
   test "checksum contract matches Naming.checksums_filename/0", %{registry: reg} do

@@ -67,6 +67,49 @@ defmodule Mix.Tasks.Release.NamesTest do
     assert kv(out)["tag"] == ["emacs-master-2026-06-11.1"]
   end
 
+  test "version+channel match (master→master) succeeds without error" do
+    tags = write_tags([])
+
+    out =
+      kv(
+        run([
+          "--version",
+          "master",
+          "--channel",
+          "master",
+          "--date",
+          "2026-06-11",
+          "--tags-file",
+          tags,
+          "--root",
+          ".."
+          | @base_args
+        ])
+      )
+
+    assert out["tag"] == ["emacs-master-2026-06-11"]
+  end
+
+  test "version+channel mismatch (master version, channel 31) raises Mix.Error" do
+    tags = write_tags([])
+
+    assert_raise Mix.Error, ~r/version↔channel mismatch/, fn ->
+      run([
+        "--version",
+        "master",
+        "--channel",
+        "31",
+        "--date",
+        "2026-06-11",
+        "--tags-file",
+        tags,
+        "--root",
+        ".."
+        | @base_args
+      ])
+    end
+  end
+
   test "raises without --os/--arch" do
     assert_raise Mix.Error, fn -> run(["--tag", "t", "--os", "macos"]) end
   end
