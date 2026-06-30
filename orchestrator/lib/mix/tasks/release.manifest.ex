@@ -32,7 +32,7 @@ defmodule Mix.Tasks.Release.Manifest do
     out = required(opts, :out)
 
     channel = channel_for!(root, version)
-    base = opts[:artifact_base] || System.get_env("MISEMACS_ARTIFACT_BASE") || "djgoku/misemacs"
+    base = opts[:artifact_base] || env_base() || "djgoku/misemacs"
 
     ref = ref_for!(root, version)
 
@@ -91,6 +91,15 @@ defmodule Mix.Tasks.Release.Manifest do
       channel
     else
       _ -> Mix.raise("no such version #{inspect(version)} (missing channel) in versions.toml")
+    end
+  end
+
+  # Treat blank MISEMACS_ARTIFACT_BASE like unset (mirrors bash ${VAR:-default} semantics).
+  defp env_base do
+    case System.get_env("MISEMACS_ARTIFACT_BASE") do
+      nil -> nil
+      "" -> nil
+      v -> v
     end
   end
 

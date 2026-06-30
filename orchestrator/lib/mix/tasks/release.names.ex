@@ -21,7 +21,9 @@ defmodule Mix.Tasks.Release.Names do
     os: :string,
     arch: :string,
     tags_file: :string,
-    tag: :string
+    tag: :string,
+    version: :string,
+    root: :string
   ]
 
   @impl true
@@ -29,6 +31,7 @@ defmodule Mix.Tasks.Release.Names do
     {opts, [], []} = OptionParser.parse(argv, strict: @switches)
     os = required(opts, :os)
     arch = required(opts, :arch)
+    validate_version_channel!(opts)
     tag = resolve_tag(opts)
 
     IO.puts("tag=#{tag}")
@@ -36,6 +39,31 @@ defmodule Mix.Tasks.Release.Names do
     IO.puts("stem=#{Naming.asset_stem(tag, os, arch)}")
     IO.puts("checksums=#{Naming.checksums_filename()}")
     Enum.each(Naming.bundle_binaries(), &IO.puts("bin=#{&1}"))
+  end
+
+  # When both --version and --channel are supplied, assert the version's channel in
+  # versions.toml equals --channel. Guards against a caller passing mismatched args
+  # (e.g. --version emacs-31 --channel master), which would tag the wrong release.
+  defp validate_version_channel!(opts) do
+    with version when is_binary(version) <- opts[:version],
+         channel when is_binary(channel) <- opts[:channel] do
+      root = opts[:root] || ".."
+
+      actual =
+        with {:ok, map} <- Toml.decode(File.read!(Path.join(root, "versions.toml"))),
+             %{"channel" => ch} <- get_in(map, ["versions", version]) do
+          ch
+        else
+          _ -> Mix.raise("no such version #{inspect(version)} in versions.toml")
+        end
+
+      if actual != channel do
+        Mix.raise(
+          "version↔channel mismatch: version #{inspect(version)} has channel #{inspect(actual)}" <>
+            " in versions.toml, but --channel #{inspect(channel)} was passed"
+        )
+      end
+    end
   end
 
   defp resolve_tag(opts) do

@@ -50,6 +50,10 @@ else
     --version "$VERSION" --tag "$TAG" --upstream-sha "$(cat "$SHA_FILE")" \
     --root "$HERE" --out "$HERE/dist/$VERSION/build-manifest.json")
   MANIFEST_PATH="$HERE/dist/$VERSION/build-manifest.json"
+  MANIFEST_REPO="$(jq -r '.repo // empty' "$MANIFEST_PATH")"
+  if [ -n "$MANIFEST_REPO" ] && [ "$MANIFEST_REPO" != "$REPO" ]; then
+    echo "FATAL: generated manifest repo '$MANIFEST_REPO' (from --version '$VERSION') != --repo '$REPO'"; exit 1
+  fi
 fi
 
 echo ">> [2] attach manifest (idempotent)"

@@ -58,7 +58,7 @@ for attempt in 1 2 3; do
       checksums=*) CHECKSUMS="${line#checksums=}" ;;
     esac
   done < <(printf '%s\n' "$snap" | (cd "$HERE/orchestrator" && mise exec -- mix release.names \
-             --channel "$CHANNEL" --date "$DATE" --os macos --arch arm64 --tags-file -))
+             --version "$VERSION" --channel "$CHANNEL" --date "$DATE" --os macos --arch arm64 --tags-file - --root "$HERE"))
   [ -n "$TAG" ] && [ -n "$ASSET" ] && [ -n "$CHECKSUMS" ] || { echo "FATAL: release.names output incomplete"; exit 1; }
 
   echo ">> package $VERSION as $TAG"
