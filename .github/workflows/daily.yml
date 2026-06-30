@@ -14,6 +14,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Repo-relative so the lab (djgoku/misemacs-phase5-lab) targets its OWN artifact repos
+  # (…-phase5-lab-emacs-<channel>) and prod (djgoku/misemacs) targets misemacs-emacs-<channel>.
+  MISEMACS_ARTIFACT_BASE: ${{ github.repository }}
+
 # No workflow-level concurrency: serialization is per-job (build-<name>-<target> +
 # finalize-latest), so distinct cells run in parallel and only same-cell / latest collide.
 
@@ -24,6 +29,7 @@ jobs:
       matrix: ${{ steps.decide.outputs.matrix }}
       any: ${{ steps.decide.outputs.any }}
       dry_run: ${{ steps.decide.outputs.dry_run }}
+      channels: ${{ steps.decide.outputs.channels }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -49,6 +55,10 @@ jobs:
           mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" | tee /tmp/decide.out
           grep -E '^(matrix|any|dry_run)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
           cat /tmp/decide.out >> "$GITHUB_STEP_SUMMARY"
+          # Distinct {channel,repo} built this run, for the finalize matrix.
+          MATRIX="$(sed -n 's/^matrix=//p' /tmp/decide.out)"
+          CHANNELS="$(printf '%s' "$MATRIX" | jq -c '[.include[] | {channel, repo}] | unique')"
+          echo "channels=$CHANNELS" >> "$GITHUB_OUTPUT"
 
   build:
     needs: decide
@@ -88,7 +98,21 @@ jobs:
           mise run relocate "${{ matrix.name }}"
       - name: cleanroom (no-pixi launch + enchant gate)
         run: mise run cleanroom "${{ matrix.name }}"
+      - name: repo name (from GITHUB_REPOSITORY — set on every trigger; event.repository is not guaranteed for schedule)
+        id: reponame
+        run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+      - name: mint publish token (App, just-in-time)
+        if: needs.decide.outputs.dry_run != 'true'
+        id: pubtoken
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.MISEMACS_APP_ID }}
+          private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
       - name: publish (real) or package+artifact (dry-run)
+        env:
+          GH_TOKEN: ${{ steps.pubtoken.outputs.token || github.token }}
         run: |
           set -euo pipefail
           if [ "${{ needs.decide.outputs.dry_run }}" = "true" ]; then
@@ -98,7 +122,7 @@ jobs:
               | sed -n 's/^tag=//p')"
             mise run package "${{ matrix.name }}" "$TAG"
           else
-            mise run publish -- --repo "${{ github.repository }}" --version "${{ matrix.name }}" --channel "${{ matrix.channel }}"
+            mise run publish -- --repo "${{ matrix.repo }}" --version "${{ matrix.name }}" --channel "${{ matrix.channel }}"
           fi
       - name: manifest fragment (real only)
         if: needs.decide.outputs.dry_run != 'true'
@@ -121,13 +145,14 @@ jobs:
     if: ${{ !cancelled() && needs.decide.outputs.dry_run != 'true' && needs.decide.outputs.any == 'true' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.decide.outputs.channels) }}
     concurrency:
-      group: finalize-latest
+      group: finalize-${{ matrix.repo }}
       cancel-in-progress: false
-    env:
-      GH_TOKEN: ${{ github.token }}
-      MISEMACS_PUBLISH_OK: ${{ github.repository == 'djgoku/misemacs' && '1' || '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -142,16 +167,29 @@ jobs:
         with:
           path: fragments
           pattern: manifest-*
-      - name: finalize (merge + attach-all + flip)
+      - name: repo name (from GITHUB_REPOSITORY — set on every trigger; event.repository is not guaranteed for schedule)
+        id: reponame
+        run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+      - name: mint finalize token (App, just-in-time)
+        id: fintoken
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.MISEMACS_APP_ID }}
+          private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
+      - name: finalize + promote this channel
+        env:
+          GH_TOKEN: ${{ steps.fintoken.outputs.token }}
         run: |
           set -euo pipefail
           FIN="$(mise run finalize -- \
-            --repo "${{ github.repository }}" \
+            --repo "${{ matrix.repo }}" \
             --fragments "$GITHUB_WORKSPACE/fragments" \
             --out "$GITHUB_WORKSPACE/dist/build-manifest.json")"
           LATEST_TAG="$(printf '%s\n' "$FIN" | sed -n 's/^latest_tag=//p')"
           BUILT_TAGS="$(printf '%s\n' "$FIN" | sed -n 's/^built_tags=//p')"
-          if [ -z "$LATEST_TAG" ]; then echo "nothing to finalize (no fragments)"; exit 0; fi
-          bash pipeline/promote --repo "${{ github.repository }}" --tag "$LATEST_TAG" \
+          if [ -z "$LATEST_TAG" ]; then echo "no fragments for ${{ matrix.repo }}"; exit 0; fi
+          bash pipeline/promote --repo "${{ matrix.repo }}" --tag "$LATEST_TAG" \
             --manifest "$GITHUB_WORKSPACE/dist/build-manifest.json" \
             --attach "$BUILT_TAGS"
