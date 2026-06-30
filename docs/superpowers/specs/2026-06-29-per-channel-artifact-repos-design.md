@@ -206,23 +206,29 @@ the combined detect state; `finalize` writes each channel's manifest to its own 
 
 Two refinements from review:
 
-1. **Read the manifest from the newest tag by sort, not the "Latest" marker — and the newest
-   tag is the SOLE authority (no scan-back).** `last_manifest/1` today fetches from the repo's
-   Latest *marker* release and self-heals by scanning older releases. Since resolution is
-   `github_tag` and the marker is now cosmetic (§4.6), the state read instead **lists the repo's
-   git tags, takes the lexical max (sort-newest)**, and fetches `build-manifest.json` from that
-   one release. If the newest tag has no/corrupt manifest, that is an `{:error, …}` (refinement 2),
-   **not** a silent fall-back to an older release's state — a per-channel repo holds one channel,
-   so the newest tag is unambiguous and authoritative, and silent scan-back could resurrect stale
-   `upstream_sha`/`inputs_hash` and mis-skip a rebuild.
-2. **Distinguish empty-repo from error (review fix).** Today `last_manifest/1` returns `nil` on
-   *any* failure — release-not-found, auth error, network error, corrupt JSON — and `nil` is also
-   the legitimate "first run, nothing built yet" signal (`Detect.changed?` → `:first_run`). M1
-   multiplies this risk across N repos. The function must return a **three-way** result:
-   `{:ok, manifest}` | `{:empty, repo}` (repo reachable, no releases yet → genuine first-run) |
-   `{:error, reason}` (auth/network/parse failure → **abort the run loudly**, never silently
-   treat as first-run and rebuild/over-skip). `decide` maps `:empty → :first_run`, `:error →`
-   non-zero exit with the repo + reason.
+1. **Read the manifest from the newest tag(s) by sort, not the "Latest" marker — scanning back
+   past manifest-less releases.** `last_manifest/1` lists the repo's git tags and, newest-first
+   (lexical-desc, bounded to the newest ~10), returns the first release that carries a
+   `build-manifest.json`. It must scan back rather than treat the lexical-newest as the sole
+   authority, because **a release is published BEFORE finalize attaches its manifest** — so during
+   and just after a run the newest tag legitimately has no manifest yet (the run's own in-flight
+   release). Taking only the newest would deadlock: finalize reads the prior manifest *after* its
+   channel's release is published, sees its own manifest-less tag, and would abort; and a
+   manifest-less release would then poison the next `decide`. (This corrects an earlier
+   "newest-only, error if it lacks a manifest" draft — the lab e2e on 2026-06-30 proved it
+   deadlocks the first run.) Resolution for *users* is still pure `github_tag` newest-tag; this
+   scan-back applies only to the internal state-store read.
+2. **Distinguish an unreachable repo from a reachable one with no state (review fix).** Today
+   `last_manifest/1` returns `nil` on *any* failure — collapsing an auth/404 error with the
+   legitimate "first run, nothing built yet" signal. M1 multiplies this risk across N repos. The
+   function returns a **three-way** result keyed on **the tag-LIST fetch** (the cheap, decisive
+   signal): `{:ok, manifest}` (a recent release carried a manifest) | `:empty` (the list call
+   succeeded but yielded no installable state — no tags, or none of the newest ~10 has a manifest
+   yet → genuine first-run / no-prior) | `{:error, reason}` (the **list call itself failed** —
+   404/auth/network → the repo is unreachable/misconfigured → **abort the run loudly**, never
+   masquerade as first-run). `decide` maps `:empty → :first_run`, `:error →` non-zero exit with
+   the repo + reason. (A manifest-less *release* is NOT an error — it's the normal pre-finalize
+   state, handled by the scan-back in refinement 1.)
 
 (Rejected alternative M2 kept one combined manifest on `djgoku/misemacs`; it avoids N reads but
 puts the state apart from the releases it describes and was declined in D3.)
