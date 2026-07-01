@@ -43,24 +43,29 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
   use ExUnit.Case, async: true
   import ExUnit.CaptureIO
 
+  @registry "MISE_AQUA_REGISTRIES=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml"
+
   defp gen(version), do: capture_io(fn -> Mix.Tasks.Release.ArtifactReadme.run(["--version", version, "--root", ".."]) end)
 
-  test "master README names the master artifact repo + ref and all three install methods" do
+  test "master README: repo, channel, ref, and all three install methods" do
     out = gen("master")
     assert out =~ "djgoku/misemacs-emacs-master"
+    assert out =~ "=master= channel"
+    assert out =~ "=master= ref"
     assert out =~ "mise use aqua:djgoku/misemacs-emacs-master@latest"
-    assert out =~ "MISE_AQUA_REGISTRIES=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml"
+    assert out =~ @registry
     assert out =~ "mise use github:djgoku/misemacs-emacs-master@latest"
-    assert out =~ "=master=" or out =~ "master channel"
-    # built-from ref
-    assert out =~ "master ref" or out =~ "=master="
   end
 
-  test "emacs-31 README names the emacs-31 artifact repo + its ref" do
+  test "emacs-31 README: channel \"31\", ref \"emacs-31\", repo, and all three install methods" do
     out = gen("emacs-31")
     assert out =~ "djgoku/misemacs-emacs-31"
+    assert out =~ "=31= channel"
+    assert out =~ "=emacs-31= ref"
+    assert out =~ "emacs-31-YYYY-MM-DD"
+    assert out =~ "mise use aqua:djgoku/misemacs-emacs-31@latest"
+    assert out =~ @registry
     assert out =~ "mise use github:djgoku/misemacs-emacs-31@latest"
-    assert out =~ "=emacs-31=" or out =~ "emacs-31 ref"
   end
 
   test "README documents the 3 release assets + verification + source pointer" do
@@ -69,12 +74,11 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
     assert out =~ "SHASUMS256.txt"
     assert out =~ "macos-arm64.tar.gz"
     assert out =~ "shasum -c"
-    assert out =~ "do not open issues" or out =~ "do not open issues or pull requests"
+    assert out =~ "do not open issues or pull requests here"
   end
 
   test "README is version-agnostic — contains NO literal date" do
-    out = gen("master")
-    refute out =~ ~r/\d{4}-\d{2}-\d{2}/
+    refute gen("master") =~ ~r/\d{4}-\d{2}-\d{2}/
   end
 
   test "unknown version raises loudly" do
@@ -84,6 +88,10 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
   end
 end
 ```
+
+> The `=master= channel` / `=master= ref` (and `=31= channel` / `=emacs-31= ref`) assertions
+> are deliberately distinct: they verify the render uses the *channel* in the "channel" line and
+> the *ref* in the "ref" line — which differ for `emacs-31` (channel `31`, ref `emacs-31`).
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -105,7 +113,7 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
       mix release.artifact_readme --version master [--artifact-base djgoku/misemacs] [--root ..]
   """
   use Mix.Task
-  alias Orchestrator.Naming
+  alias Orchestrator.{Manifest, Naming}
 
   @switches [version: :string, artifact_base: :string, root: :string]
 
@@ -114,12 +122,17 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     {opts, [], []} = OptionParser.parse(argv, strict: @switches)
     root = opts[:root] || ".."
     version = opts[:version] || Mix.raise("missing required --version")
-    channel = channel_for!(root, version)
-    ref = ref_for!(root, version)
-    base = opts[:artifact_base] || env_base() || "djgoku/misemacs"
-    repo = Naming.artifact_repo(base, channel)
 
-    IO.puts(render(%{channel: channel, ref: ref, base: base, repo: repo}))
+    # Reuse the public version list (%{name, channel, ref}) instead of re-parsing versions.toml.
+    v =
+      Manifest.versions!(root)
+      |> Enum.find(&(&1.name == version)) ||
+        Mix.raise("no such version #{inspect(version)} in versions.toml")
+
+    base = opts[:artifact_base] || env_base() || "djgoku/misemacs"
+    repo = Naming.artifact_repo(base, v.channel)
+
+    IO.puts(render(%{channel: v.channel, ref: v.ref, base: base, repo: repo}))
   end
 
   defp render(%{channel: channel, ref: ref, base: base, repo: repo}) do
@@ -195,24 +208,7 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     """
   end
 
-  defp channel_for!(root, version) do
-    with {:ok, map} <- Toml.decode(File.read!(Path.join(root, "versions.toml"))),
-         %{"channel" => channel} <- get_in(map, ["versions", version]) do
-      channel
-    else
-      _ -> Mix.raise("no such version #{inspect(version)} (missing channel) in versions.toml")
-    end
-  end
-
-  defp ref_for!(root, version) do
-    with {:ok, map} <- Toml.decode(File.read!(Path.join(root, "versions.toml"))),
-         %{"ref" => ref} <- get_in(map, ["versions", version]) do
-      ref
-    else
-      _ -> Mix.raise("no such version #{inspect(version)} in versions.toml")
-    end
-  end
-
+  # Treat blank MISEMACS_ARTIFACT_BASE like unset (mirrors release.manifest + bash ${VAR:-default}).
   defp env_base do
     case System.get_env("MISEMACS_ARTIFACT_BASE") do
       nil -> nil
@@ -279,29 +275,26 @@ git commit -m "feat(mise): artifact-readme task wraps release.artifact_readme"
 
 ---
 
-## Task 3: Wire the generator into the bootstrap docs
+## Task 3: Wire the generator into the bootstrap docs + fix stale wording
 
-Replace the `--add-readme` one-liner in both the user-facing README and the per-channel spec with the generator-based bootstrap.
+The two anchors differ per file: `README.org` already says `--add-readme`; the per-channel spec §4.10 still says plain `--public`. Also fix two pre-existing issues: the main README uses the **deprecated** `MISE_AQUA_REGISTRY_URL` (renamed to `MISE_AQUA_REGISTRIES`), and both docs call a fresh artifact repo "empty" (it now carries the generated README — only *releases* are absent).
 
 **Files:**
 - Modify: `README.org`
 - Modify: `docs/superpowers/specs/2026-06-29-per-channel-artifact-repos-design.md`
 
-- [ ] **Step 1: Update `README.org` add-a-version step 4**
+- [ ] **Step 1: README — replace add-a-version step 4 (`--add-readme`) with the generator bootstrap**
 
-In `README.org`, find the "Adding a build" step 4 (it currently reads, with the `--add-readme` note):
-
+EXACT old block in `README.org` (around line 144):
 ```
 4. Create the artifact repo (one-time). It MUST have an initial commit — GitHub returns =HTTP 422 "Repository is empty"= when you try to create the first release/tag on a repo with no default branch, so pass =--add-readme=:
    #+begin_src sh
    gh repo create djgoku/misemacs-emacs-<channel> --public --add-readme
    #+end_src
 ```
-
-Replace that step 4 block with (note: the generated README is the required initial commit, so no `--add-readme`):
-
+Replace with:
 ```
-4. Create the artifact repo and seed it with its generated README (one-time). The repo MUST have an initial commit — GitHub returns =HTTP 422 "Repository is empty"= on the first release otherwise — and =mise run artifact-readme= produces the right one:
+4. Create the artifact repo and seed it with its generated README (one-time — the README is the required initial commit; without it GitHub returns =HTTP 422 "Repository is empty"= on the first release):
    #+begin_src sh
    gh repo create djgoku/misemacs-emacs-<channel> --public
    mise run artifact-readme -- --version <name> > /tmp/r.org
@@ -310,15 +303,58 @@ Replace that step 4 block with (note: the generated README is the required initi
    #+end_src
 ```
 
-- [ ] **Step 2: Update the per-channel spec §4.10 step 4**
+- [ ] **Step 2: README — rename the deprecated env var (2 spots)**
 
-In `docs/superpowers/specs/2026-06-29-per-channel-artifact-repos-design.md`, find §4.10 step 4 (the `gh repo create … --public` bootstrap). Replace its `gh repo create` line/command with the three-line generator bootstrap above (create repo → `mise run artifact-readme -- --version <name> > /tmp/r.org` → `gh api … contents/README.org -X PUT`), and note the README is generated by `mix release.artifact_readme` (single source of truth).
+`MISE_AQUA_REGISTRY_URL` is deprecated → `MISE_AQUA_REGISTRIES` (same value/URL). Replace both occurrences in `README.org`:
+- line 24 export: `export MISE_AQUA_REGISTRY_URL=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml` → `export MISE_AQUA_REGISTRIES=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml`
+- line 50 prose: `=MISE_AQUA_REGISTRY_URL= continues to point at it.` → `=MISE_AQUA_REGISTRIES= continues to point at it.`
 
-- [ ] **Step 3: Commit**
+Then `grep -n MISE_AQUA_REGISTRY_URL README.org` — expect **no matches**.
 
+- [ ] **Step 3: README — fix the "starts empty" wording (line 56)**
+
+Replace in `README.org`:
+```
+*Fresh-channel caveat.* A newly-added channel has no installable version until its first daily build publishes — its artifact repo starts empty.
+```
+with:
+```
+*Fresh-channel caveat.* A newly-added channel has no installable version until its first daily build publishes — its artifact repo has no releases yet.
+```
+
+- [ ] **Step 4: Spec §4.10 step 4 — replace the `--public` bootstrap**
+
+In `docs/superpowers/specs/2026-06-29-per-channel-artifact-repos-design.md`, EXACT old text (§4.10 step 4):
+```
+4. **Bootstrap the artifact repo (D4: decided — manual):** run `gh repo create
+   djgoku/misemacs-emacs-30 --public` once (~10 s), then install the GitHub App on it. CI does
+   **not** create repos — keeping the App's permission to contents-only (least privilege). If the
+   repo/App/registry aren't in place, the §4.8 preflight fails the next run loudly (and it
+   re-runs cleanly once they exist).
+```
+Replace with:
+```
+4. **Bootstrap the artifact repo (D4: decided — manual):** create it and seed its generated
+   README (the README is the required initial commit — an empty repo 422s on the first release):
+   `gh repo create djgoku/misemacs-emacs-30 --public`, then `mise run artifact-readme -- --version
+   emacs-30 > /tmp/r.org` and `gh api repos/djgoku/misemacs-emacs-30/contents/README.org -X PUT -f
+   message="init: artifact repo" -f content="$(base64 -i /tmp/r.org)"`, then install the GitHub App
+   on it. The README is generated by `mix release.artifact_readme` (single source of truth). CI does
+   **not** create repos — keeping the App's permission to contents-only (least privilege). If the
+   repo/App/registry aren't in place, the §4.8 preflight fails the next run loudly (and it re-runs
+   cleanly once they exist).
+```
+
+- [ ] **Step 5: Spec §4.8 — "is empty" → "has no releases"**
+
+In the same spec, the §4.8 "A channel that never built" bullet currently reads (wrapped across two lines): `…its artifact repo is` / `empty, so …`. Read the bullet and change `its artifact repo is empty, so` to `its artifact repo has no releases, so` (preserve the existing line wrap/indentation — it's a two-word edit: `is`→`has no`, `empty`→`releases`).
+
+- [ ] **Step 6: Full suite (docs don't affect tests, but confirm nothing else broke) + commit**
+
+Run: `cd orchestrator && mix test` — green.
 ```bash
 git add README.org docs/superpowers/specs/2026-06-29-per-channel-artifact-repos-design.md
-git commit -m "docs: bootstrap artifact repos with the generated README (mise run artifact-readme)"
+git commit -m "docs: bootstrap artifact repos via generated README; MISE_AQUA_REGISTRIES; 'no releases yet'"
 ```
 
 ---
