@@ -126,3 +126,8 @@ run = "mix orchestrate.decide"
 description = "Phase 5: merge per-cell manifest fragments + pick latest; args: --repo <owner/repo> --fragments <dir> --out <path>"
 dir = "orchestrator"
 run = "mix orchestrate.finalize"
+
+[tasks.artifact-readme]
+description = "Print the channel-specific README.org for an artifact repo; args: --version <name> [--artifact-base <base>]"
+dir = "orchestrator"
+run = "mix release.artifact_readme"
