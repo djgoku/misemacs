@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Release.Names do
   per `Naming.bundle_binaries/0` entry. Bash must parse, never re-derive.
   """
   use Mix.Task
-  alias Orchestrator.{Core.Tag, Naming}
+  alias Orchestrator.{Core.Tag, Manifest, Naming}
 
   @switches [
     channel: :string,
@@ -50,11 +50,9 @@ defmodule Mix.Tasks.Release.Names do
       root = opts[:root] || ".."
 
       actual =
-        with {:ok, map} <- Toml.decode(File.read!(Path.join(root, "versions.toml"))),
-             %{"channel" => ch} <- get_in(map, ["versions", version]) do
-          ch
-        else
-          _ -> Mix.raise("no such version #{inspect(version)} in versions.toml")
+        case Enum.find(Manifest.versions!(root), &(&1.name == version)) do
+          nil -> Mix.raise("no such version #{inspect(version)} in versions.toml")
+          v -> v.channel
         end
 
       if actual != channel do

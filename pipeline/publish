@@ -15,14 +15,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$REPO" ] || { echo "FATAL: --repo is required (G8 — no default repo)"; exit 1; }
-if [ "$REPO" = "djgoku/misemacs" ] && [ "${MISEMACS_PUBLISH_OK:-}" != "1" ]; then
-  echo "FATAL: publishing to djgoku/misemacs requires MISEMACS_PUBLISH_OK=1 (G8 interlock)"; exit 1
-fi
 CHANNEL="${CHANNEL:-$VERSION}"   # fallback ONLY valid when name==channel (master); other versions
                                  # MUST pass --channel (the matrix carries it) or the tag doubles
                                  # (e.g. version emacs-31 / channel 31 -> emacs-emacs-31-DATE). v1.
 # Derived-name assertion (data validation, NOT an auth gate — spec D2/§4.5): the target
 # repo MUST be this channel's artifact repo. Catches a bad/empty matrix.repo before any gh write.
+# Convention owned by Orchestrator.Naming.artifact_repo/2. Also supersedes the old G8
+# MISEMACS_PUBLISH_OK interlock: a derived "<base>-emacs-<ch>" name can never equal the bare
+# source repo, so publishing to djgoku/misemacs itself already fails here.
 EXPECTED_REPO="${MISEMACS_ARTIFACT_BASE:-djgoku/misemacs}-emacs-$CHANNEL"
 if [ "$REPO" != "$EXPECTED_REPO" ]; then
   echo "FATAL: --repo '$REPO' != expected artifact repo '$EXPECTED_REPO' for channel '$CHANNEL'"; exit 1

@@ -4,7 +4,7 @@ defmodule Orchestrator.RegistryContractTest do
 
   @moduledoc """
   Binds the VENDORED consumer registry (aqua/registry.yaml — what
-  MISE_AQUA_REGISTRY_URL serves from this repo's main) to Orchestrator.Naming.
+  MISE_AQUA_REGISTRIES serves from this repo's main) to Orchestrator.Naming.
   Line-presence checks on the small, stable YAML — deliberately no YAML dep.
   Drift in either direction must break the suite (spec G5/P7).
   """
@@ -89,6 +89,10 @@ defmodule Orchestrator.RegistryContractTest do
   test "each package points at its per-channel artifact repo", %{registry: reg} do
     assert reg =~ "repo_name: misemacs-emacs-master"
     assert reg =~ "repo_name: misemacs-emacs-31"
+
+    # Negative guard: no package may point at the bare shared source repo — a future
+    # package must use its own per-channel artifact repo (plan Task 8).
+    refute reg =~ ~r/repo_name:\s*misemacs\b(?!-)/
   end
 
   test "both packages keep version_source: github_tag", %{registry: reg} do

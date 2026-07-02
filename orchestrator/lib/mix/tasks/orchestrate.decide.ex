@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Orchestrate.Decide do
       mix orchestrate.decide --mode dry-run --date <d>
   """
   use Mix.Task
-  alias Orchestrator.{Manifest, Orchestrate, Core.Hash}
+  alias Orchestrator.{Manifest, Naming, Orchestrate, Core.Hash}
 
   @switches [repo: :string, date: :string, mode: :string, force_version: :string, root: :string]
 
@@ -101,18 +101,9 @@ defmodule Mix.Tasks.Orchestrate.Decide do
 
   # Artifact-repo base: env override (lab/CI) else the SOURCE repo string itself
   # (djgoku/misemacs -> djgoku/misemacs-emacs-<channel>). Default keeps non-detect modes working.
-  defp artifact_base(opts) do
-    env_base() || opts[:repo] || "djgoku/misemacs"
-  end
-
-  # Treat blank MISEMACS_ARTIFACT_BASE like unset (mirrors bash ${VAR:-default} semantics).
-  defp env_base do
-    case System.get_env("MISEMACS_ARTIFACT_BASE") do
-      nil -> nil
-      "" -> nil
-      v -> v
-    end
-  end
+  # Env-FIRST (unlike the opt-first tasks): CI passes --repo as the source repo, and the lab's
+  # env override must beat it — hence the explicit composition over Naming.artifact_base/1.
+  defp artifact_base(opts), do: Naming.artifact_base(Naming.env_artifact_base() || opts[:repo])
 
   # Read each DISTINCT channel's manifest from its artifact repo; merge :ok ones'
   # "versions" maps into one combined manifest (the shape Decide.plan consumes via
@@ -122,7 +113,7 @@ defmodule Mix.Tasks.Orchestrate.Decide do
     |> Enum.map(& &1.channel)
     |> Enum.uniq()
     |> Enum.reduce(%{"schema" => 1, "versions" => %{}}, fn channel, acc ->
-      repo = Orchestrator.Naming.artifact_repo(base, channel)
+      repo = Naming.artifact_repo(base, channel)
 
       case read.(repo) do
         {:ok, %{"versions" => v}} -> update_in(acc, ["versions"], &Map.merge(&1, v))

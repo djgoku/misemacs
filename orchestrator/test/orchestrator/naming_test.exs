@@ -58,4 +58,13 @@ defmodule Orchestrator.NamingTest do
     assert Naming.artifact_repo("djgoku/misemacs-lab", "master") ==
              "djgoku/misemacs-lab-emacs-master"
   end
+
+  # Env precedence (MISEMACS_ARTIFACT_BASE incl. blank-safety) is covered end-to-end by
+  # release_manifest_test's blank-env regression; this test pins the pure override path
+  # (async-safe: no env mutation here).
+  test "artifact_base: override wins; nil falls back to the default base" do
+    assert Naming.artifact_base("o/r") == "o/r"
+    assert Naming.artifact_base(nil) == "djgoku/misemacs"
+    assert Naming.artifact_base() == "djgoku/misemacs"
+  end
 end

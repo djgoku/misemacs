@@ -29,7 +29,7 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
       |> Enum.find(&(&1.name == version)) ||
         Mix.raise("no such version #{inspect(version)} in versions.toml")
 
-    base = opts[:artifact_base] || env_base() || "djgoku/misemacs"
+    base = Naming.artifact_base(opts[:artifact_base])
     repo = Naming.artifact_repo(base, v.channel)
 
     IO.puts(render(%{channel: v.channel, ref: v.ref, base: base, repo: repo}))
@@ -106,14 +106,5 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     Source code, the build system, and documentation live in
     [[https://github.com/#{base}][#{base}]].
     """
-  end
-
-  # Treat blank MISEMACS_ARTIFACT_BASE like unset (mirrors release.manifest + bash ${VAR:-default}).
-  defp env_base do
-    case System.get_env("MISEMACS_ARTIFACT_BASE") do
-      nil -> nil
-      "" -> nil
-      v -> v
-    end
   end
 end

@@ -44,6 +44,7 @@ defmodule Orchestrator.Releases.Gh do
 
   def classify({:ok, tags}, fetch) do
     tags
+    # Lexical-desc == aqua's github_tag order (incl. the `.10 < .9` quirk — see Core.Latest).
     |> Enum.sort(:desc)
     |> Enum.take(@scan_back)
     |> Enum.find_value(fn tag -> fetch.(tag) end)
@@ -63,6 +64,9 @@ defmodule Orchestrator.Releases.Gh do
     end
   end
 
+  # nil conflates "no manifest on this tag" with a transient `gh release download` failure —
+  # deliberate: worst case the scan sees no prior state and rebuilds (safe, self-healing).
+  # The tag LIST above is the decisive reachability/auth signal, per the design (§4.7).
   defp fetch(repo, tag) do
     dir = Path.join(System.tmp_dir!(), "rel-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)

@@ -31,10 +31,18 @@ defmodule Mix.Tasks.Release.Manifest do
     sha = required(opts, :upstream_sha)
     out = required(opts, :out)
 
-    channel = channel_for!(root, version)
-    base = opts[:artifact_base] || env_base() || "djgoku/misemacs"
+    # Single versions.toml lookup via the public list (same source release.artifact_readme uses).
+    v =
+      Enum.find(Manifest.versions!(root), &(&1.name == version)) ||
+        Mix.raise("no such version #{inspect(version)} in versions.toml")
 
-    ref = ref_for!(root, version)
+    unless is_binary(v.channel) and is_binary(v.ref) do
+      Mix.raise("version #{inspect(version)} is missing channel/ref in versions.toml")
+    end
+
+    channel = v.channel
+    ref = v.ref
+    base = Naming.artifact_base(opts[:artifact_base])
 
     [mise_toml, pixi_toml, pixi_lock] =
       version
@@ -73,34 +81,6 @@ defmodule Mix.Tasks.Release.Manifest do
 
     File.write!(out, JSON.encode!(manifest) <> "\n")
     IO.puts("wrote #{out}")
-  end
-
-  defp ref_for!(root, version) do
-    # Toml.decode/1 (non-bang) is the form Manifest.load already uses — proven API.
-    with {:ok, map} <- Toml.decode(File.read!(Path.join(root, "versions.toml"))),
-         %{"ref" => ref} <- get_in(map, ["versions", version]) do
-      ref
-    else
-      _ -> Mix.raise("no such version #{inspect(version)} in versions.toml")
-    end
-  end
-
-  defp channel_for!(root, version) do
-    with {:ok, map} <- Toml.decode(File.read!(Path.join(root, "versions.toml"))),
-         %{"channel" => channel} <- get_in(map, ["versions", version]) do
-      channel
-    else
-      _ -> Mix.raise("no such version #{inspect(version)} (missing channel) in versions.toml")
-    end
-  end
-
-  # Treat blank MISEMACS_ARTIFACT_BASE like unset (mirrors bash ${VAR:-default} semantics).
-  defp env_base do
-    case System.get_env("MISEMACS_ARTIFACT_BASE") do
-      nil -> nil
-      "" -> nil
-      v -> v
-    end
   end
 
   defp required(opts, key) do
