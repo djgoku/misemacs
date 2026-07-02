@@ -5,7 +5,7 @@ defmodule Orchestrator.Naming do
   These MUST match the consumed aqua registry template — the vendored
   `aqua/registry.yaml` in this repo, bound here by `registry_contract_test.exs`
   (Phase 4, P7/G5; the `djgoku/aqua-registry@feat/...` branch is a PR-shaped copy,
-  not the file `MISE_AQUA_REGISTRY_URL` serves):
+  not the file `MISE_AQUA_REGISTRIES` serves):
 
       misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz   (darwin -> macos, format tar.gz)
 
@@ -19,6 +19,25 @@ defmodule Orchestrator.Naming do
   @asset_prefix "misemacs"
   @format "tar.gz"
   @checksums "SHASUMS256.txt"
+  @default_base "djgoku/misemacs"
+
+  @doc """
+  Artifact-repo base: `override || env || "djgoku/misemacs"`. `override` is the caller's
+  explicit candidate (its CLI opt); env is `MISEMACS_ARTIFACT_BASE` via `env_artifact_base/0`.
+  Callers with env-first precedence (decide) compose explicitly.
+  """
+  @spec artifact_base(String.t() | nil) :: String.t()
+  def artifact_base(override \\ nil), do: override || env_artifact_base() || @default_base
+
+  @doc "Blank-safe `MISEMACS_ARTIFACT_BASE`: nil when unset OR blank (mirrors bash `${VAR:-default}`)."
+  @spec env_artifact_base() :: String.t() | nil
+  def env_artifact_base do
+    case System.get_env("MISEMACS_ARTIFACT_BASE") do
+      nil -> nil
+      "" -> nil
+      v -> v
+    end
+  end
 
   @doc "Base release tag for a channel/date: `emacs-<channel>-<date>` (no `.N` suffix)."
   @spec tag_base(String.t(), String.t()) :: String.t()

@@ -74,7 +74,6 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      MISEMACS_PUBLISH_OK: ${{ github.repository == 'djgoku/misemacs' && '1' || '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -106,9 +105,12 @@ jobs:
         id: pubtoken
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.MISEMACS_APP_ID }}
+          # Numeric App ID is accepted here: the action reads client-id || app-id into the
+          # same JWT iss field (app-id is just the deprecated input name).
+          client-id: ${{ secrets.MISEMACS_APP_ID }}
           private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          # <name>-emacs-<channel> — convention owned by Orchestrator.Naming.artifact_repo/2.
           repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
       - name: publish (real) or package+artifact (dry-run)
         env:
@@ -174,9 +176,11 @@ jobs:
         id: fintoken
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.MISEMACS_APP_ID }}
+          # Numeric App ID is accepted here: the action reads client-id || app-id (see pubtoken).
+          client-id: ${{ secrets.MISEMACS_APP_ID }}
           private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          # <name>-emacs-<channel> — convention owned by Orchestrator.Naming.artifact_repo/2.
           repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
       - name: finalize + promote this channel
         env:
