@@ -107,12 +107,18 @@ defmodule Mix.Tasks.Release.ManifestTest do
     out = Path.join(dir, "build-manifest.json")
 
     Mix.Tasks.Release.Manifest.run([
-      "--version", "master",
-      "--tag", "emacs-master-2026-06-29",
-      "--upstream-sha", "deadbeef",
-      "--out", out,
-      "--root", "..",
-      "--clt-fingerprint", "test-clt"
+      "--version",
+      "master",
+      "--tag",
+      "emacs-master-2026-06-29",
+      "--upstream-sha",
+      "deadbeef",
+      "--out",
+      out,
+      "--root",
+      "..",
+      "--clt-fingerprint",
+      "test-clt"
     ])
 
     m = out |> File.read!() |> JSON.decode!()
