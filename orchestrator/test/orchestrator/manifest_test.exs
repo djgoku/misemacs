@@ -130,7 +130,15 @@ defmodule Orchestrator.ManifestTest do
 
   test "jobs/3 stamps the per-channel artifact repo onto every cell" do
     versions = %{"master" => %{"channel" => "master", "ref" => "master"}}
-    targets = %{"macos-arm64" => %{"os" => "macos", "arch" => "arm64", "runner" => "macos-26", "enabled" => true}}
+
+    targets = %{
+      "macos-arm64" => %{
+        "os" => "macos",
+        "arch" => "arm64",
+        "runner" => "macos-26",
+        "enabled" => true
+      }
+    }
 
     [job] = Orchestrator.Manifest.jobs(versions, targets, "djgoku/misemacs")
     assert job.repo == "djgoku/misemacs-emacs-master"

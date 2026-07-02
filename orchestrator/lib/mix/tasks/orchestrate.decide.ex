@@ -34,6 +34,7 @@ defmodule Mix.Tasks.Orchestrate.Decide do
     date = fetch!(opts, :date)
     mode = fetch!(opts, :mode)
     versions = Manifest.versions!(root)
+
     {:ok, jobs} =
       Manifest.load(
         Path.join(root, "versions.toml"),
@@ -44,6 +45,7 @@ defmodule Mix.Tasks.Orchestrate.Decide do
     {states, manifest} =
       if mode == "detect" do
         clt = deps.toolchain.()
+
         {current_states(versions, root, clt, deps.upstream),
          combined_manifest(versions, artifact_base(opts), deps.releases)}
       else

@@ -4,7 +4,11 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
 
   @registry "MISE_AQUA_REGISTRIES=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml"
 
-  defp gen(version), do: capture_io(fn -> Mix.Tasks.Release.ArtifactReadme.run(["--version", version, "--root", ".."]) end)
+  defp gen(version),
+    do:
+      capture_io(fn ->
+        Mix.Tasks.Release.ArtifactReadme.run(["--version", version, "--root", ".."])
+      end)
 
   test "master README: repo, channel, ref, and all three install methods" do
     out = gen("master")
@@ -42,7 +46,9 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
 
   test "unknown version raises loudly" do
     assert_raise Mix.Error, ~r/no such version/, fn ->
-      capture_io(fn -> Mix.Tasks.Release.ArtifactReadme.run(["--version", "nope", "--root", ".."]) end)
+      capture_io(fn ->
+        Mix.Tasks.Release.ArtifactReadme.run(["--version", "nope", "--root", ".."])
+      end)
     end
   end
 end

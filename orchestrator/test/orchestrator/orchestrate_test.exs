@@ -48,7 +48,12 @@ defmodule Orchestrator.OrchestrateTest do
 
   test "finalize_outputs merges fragments and picks the last built tag" do
     repo = "djgoku/misemacs-emacs-master"
-    frag = %{"repo" => repo, "versions" => %{"master" => %{"released_tag" => "emacs-master-2026-06-13"}}}
+
+    frag = %{
+      "repo" => repo,
+      "versions" => %{"master" => %{"released_tag" => "emacs-master-2026-06-13"}}
+    }
+
     out = Orchestrate.finalize_outputs(nil, [frag], repo)
     assert out.latest_tag == "emacs-master-2026-06-13"
     assert out.manifest["versions"]["master"]["released_tag"] == "emacs-master-2026-06-13"
@@ -64,10 +69,18 @@ defmodule Orchestrator.OrchestrateTest do
     repo = "djgoku/misemacs-emacs-31"
 
     frags = [
-      %{"repo" => repo, "versions" => %{"emacs-31" => %{"released_tag" => "emacs-31-2026-06-28"}}},
-      %{"repo" => repo, "versions" => %{"emacs-31" => %{"released_tag" => "emacs-31-2026-06-29"}}},
-      %{"repo" => "djgoku/misemacs-emacs-master",
-        "versions" => %{"master" => %{"released_tag" => "emacs-master-2026-06-29"}}}
+      %{
+        "repo" => repo,
+        "versions" => %{"emacs-31" => %{"released_tag" => "emacs-31-2026-06-28"}}
+      },
+      %{
+        "repo" => repo,
+        "versions" => %{"emacs-31" => %{"released_tag" => "emacs-31-2026-06-29"}}
+      },
+      %{
+        "repo" => "djgoku/misemacs-emacs-master",
+        "versions" => %{"master" => %{"released_tag" => "emacs-master-2026-06-29"}}
+      }
     ]
 
     out = Orchestrator.Orchestrate.finalize_outputs(nil, frags, repo)

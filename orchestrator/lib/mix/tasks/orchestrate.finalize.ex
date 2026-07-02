@@ -34,8 +34,12 @@ defmodule Mix.Tasks.Orchestrate.Finalize do
 
     prior =
       case deps.releases.(repo) do
-        {:ok, manifest} -> manifest
-        :empty -> nil
+        {:ok, manifest} ->
+          manifest
+
+        :empty ->
+          nil
+
         {:error, reason} ->
           Mix.raise("finalize: cannot read prior manifest for #{repo}: #{inspect(reason)}")
       end
