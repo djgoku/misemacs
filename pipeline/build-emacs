@@ -11,12 +11,14 @@ PIXI=(mise exec -- pixi)
 [ -f "$VDIR/pixi.toml" ] || { echo "FATAL: $VDIR/pixi.toml missing"; exit 1; }
 EMACS_REF="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_REF:?}"')"
 EMACS_FLAGS="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_CONFIGURE_FLAGS:?}"')"
+# Dir-scoped read (like EMACS_REF): versions/<v>/mise.toml [env] may override the root default.
+EMACS_UPSTREAM="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_UPSTREAM:?}"')"
 mkdir -p "$OUT"
-echo ">> [1] fetch emacsmirror/emacs $EMACS_REF -> $SRC"
+echo ">> [1] fetch $EMACS_UPSTREAM $EMACS_REF -> $SRC"
 if [ -d "$SRC/.git" ]; then
   git -C "$SRC" fetch --depth 1 origin "$EMACS_REF"; git -C "$SRC" checkout -q -f FETCH_HEAD
 else
-  rm -rf "$SRC"; git clone --depth 1 --branch "$EMACS_REF" https://github.com/emacsmirror/emacs "$SRC"
+  rm -rf "$SRC"; git clone --depth 1 --branch "$EMACS_REF" "$EMACS_UPSTREAM" "$SRC"
 fi
 echo ">> [2] configure + make + install UNDER the pixi env"
 "${PIXI[@]}" run --manifest-path "$VDIR/pixi.toml" bash -euo pipefail -c '

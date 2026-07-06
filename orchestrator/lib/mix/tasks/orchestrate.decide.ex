@@ -67,7 +67,7 @@ defmodule Mix.Tasks.Orchestrate.Decide do
       [mise_toml, pixi_toml, pixi_lock] =
         v.name |> Manifest.version_input_files() |> Enum.map(&File.read!(Path.join(root, &1)))
 
-      sha = resolve.(v.ref)
+      sha = resolve.(Naming.upstream(v.upstream), v.ref)
 
       hash =
         Hash.version_fingerprint(%{
@@ -90,7 +90,7 @@ defmodule Mix.Tasks.Orchestrate.Decide do
 
   def default_deps do
     %{
-      upstream: &Orchestrator.Upstream.GitLsRemote.resolve/1,
+      upstream: &Orchestrator.Upstream.GitLsRemote.resolve/2,
       releases: &Orchestrator.Releases.Gh.last_manifest/1,
       toolchain: &Orchestrator.Toolchain.Macos.clt_fingerprint/0
     }

@@ -50,16 +50,17 @@ for attempt in 1 2 3; do
   # snapshot() aborts loudly if either source fails (see its comment); cmd-sub here propagates
   # that. A clean partial snapshot is therefore impossible — no silent P2 dangling-tag adoption.
   snap="$(snapshot)"
-  TAG=""; ASSET=""; CHECKSUMS=""
+  TAG=""; ASSET=""; CHECKSUMS=""; UPSTREAM_URL=""
   while IFS= read -r line; do
     case "$line" in
       tag=*)       TAG="${line#tag=}" ;;
       asset=*)     ASSET="${line#asset=}" ;;
       checksums=*) CHECKSUMS="${line#checksums=}" ;;
+      upstream=*)  UPSTREAM_URL="${line#upstream=}" ;;
     esac
   done < <(printf '%s\n' "$snap" | (cd "$HERE/orchestrator" && mise exec -- mix release.names \
              --version "$VERSION" --channel "$CHANNEL" --date "$DATE" --os macos --arch arm64 --tags-file - --root "$HERE"))
-  [ -n "$TAG" ] && [ -n "$ASSET" ] && [ -n "$CHECKSUMS" ] || { echo "FATAL: release.names output incomplete"; exit 1; }
+  [ -n "$TAG" ] && [ -n "$ASSET" ] && [ -n "$CHECKSUMS" ] && [ -n "$UPSTREAM_URL" ] || { echo "FATAL: release.names output incomplete"; exit 1; }
 
   echo ">> package $VERSION as $TAG"
   bash "$HERE/pipeline/package" "$VERSION" "$TAG"
@@ -67,9 +68,10 @@ for attempt in 1 2 3; do
 
   echo ">> gh release create $TAG on $REPO (--latest=false, G1)"
   set +e
-  # Full commit URL (not a bare sha): GitHub renders it as a short emacsmirror/emacs@<sha7> link.
+  # Full commit URL (not a bare sha): GitHub renders it as a short <upstream>@<sha7> link.
+  # UPSTREAM_URL is this version's upstream repo, parsed from release.names above.
   err="$(gh release create "$TAG" --repo "$REPO" --title "$TAG" --latest=false \
-          --notes "$CHANNEL @ https://github.com/emacsmirror/emacs/commit/$UPSTREAM_SHA" \
+          --notes "$CHANNEL @ $UPSTREAM_URL/commit/$UPSTREAM_SHA" \
           "$HERE/dist/$VERSION/$ASSET" "$HERE/dist/$VERSION/$CHECKSUMS" 2>&1)"
   rc=$?
   set -e

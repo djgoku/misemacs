@@ -1,5 +1,12 @@
 # THE manifest. Adding a version = one entry here + a versions/<name>/ dir.
 # Table key == git ref (the join key / versions/<name>/ dir); channel is the short form.
+#
+# OPTIONAL per-version `upstream = "<repo url>"` — for a version built from a different
+# repo (e.g. a future emacs-mac channel). Default: the shared EMACS_UPSTREAM (root
+# mise.toml [env]). Used by the ORCHESTRATOR (decide sha resolution, release-notes link
+# via release.names, artifact-repo README); the BUILD scripts clone via the mise env —
+# mirror an override there too (versions/<name>/mise.toml [env] EMACS_UPSTREAM), the
+# same dual representation as ref / EMACS_REF.
 [versions.master]
 ref = "master"        # git ref in emacsmirror/emacs
 channel = "master"    # used in the tag: emacs-master-YYYY-MM-DD

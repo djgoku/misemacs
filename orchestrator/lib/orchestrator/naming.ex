@@ -39,6 +39,17 @@ defmodule Orchestrator.Naming do
     end
   end
 
+  @default_upstream "https://github.com/emacsmirror/emacs"
+
+  @doc """
+  Upstream Emacs repo URL: `override || env || default`. `override` is a version's optional
+  `upstream` key from versions.toml (per-version fork, e.g. a future emacs-mac channel);
+  env is `EMACS_UPSTREAM` (root mise.toml `[env]`, which the fallback matches).
+  """
+  @spec upstream(String.t() | nil) :: String.t()
+  def upstream(override \\ nil),
+    do: override || System.get_env("EMACS_UPSTREAM") || @default_upstream
+
   @doc "Base release tag for a channel/date: `emacs-<channel>-<date>` (no `.N` suffix)."
   @spec tag_base(String.t(), String.t()) :: String.t()
   def tag_base(channel, date), do: "emacs-#{channel}-#{date}"

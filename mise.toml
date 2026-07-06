@@ -7,6 +7,13 @@ erlang = "29.0.2"
 elixir = "1.20.0-otp-29"
 pixi   = "0.70.2"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
 
+[env]
+# DEFAULT upstream Emacs repo URL, shared by all versions. Per-version override: `upstream`
+# in versions.toml (orchestrator: decide/notes/README via Naming.upstream/1) + the same
+# value in versions/<name>/mise.toml [env] (build scripts' dir-scoped clone) — the ref /
+# EMACS_REF dual-representation pattern. Naming.upstream/1's built-in fallback matches this.
+EMACS_UPSTREAM = "https://github.com/emacsmirror/emacs"
+
 [plugins]
 # Canonical local-first pixi path (identical in CI). NOT load-bearing: direct `pixi`/`pixi run`
 # is the documented fallback (same pixi.lock). See spec §6.1/§6.4.

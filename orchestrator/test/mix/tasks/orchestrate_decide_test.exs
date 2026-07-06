@@ -68,7 +68,16 @@ defmodule Mix.Tasks.Orchestrate.DecideTest do
     root = tmp_detect_root()
 
     deps = %{
-      upstream: fn _ref -> "sha-x" end,
+      # Per-version upstream: master has no override (shared default), emacs-30.2 carries
+      # the fixture's fork URL — decide must hand each version's URL to the resolver.
+      upstream: fn url, ref ->
+        case ref do
+          "master" -> assert url == Orchestrator.Naming.upstream()
+          "emacs-30.2" -> assert url == "https://example.test/fork/emacs"
+        end
+
+        "sha-x"
+      end,
       releases: fn _repo -> :empty end,
       toolchain: fn -> "sha256:cltfix" end
     }
@@ -86,7 +95,7 @@ defmodule Mix.Tasks.Orchestrate.DecideTest do
 
   test "detect: :error from a channel repo aborts the run" do
     deps = %{
-      upstream: fn _v -> "sha" end,
+      upstream: fn _url, _ref -> "sha" end,
       toolchain: fn -> "test-clt" end,
       releases: fn
         "djgoku/misemacs-emacs-31" -> {:error, :unauthorized}
@@ -125,7 +134,7 @@ defmodule Mix.Tasks.Orchestrate.DecideTest do
     }
 
     deps = %{
-      upstream: fn _ref -> "sha-x" end,
+      upstream: fn _url, _ref -> "sha-x" end,
       toolchain: fn -> "sha256:cltfix" end,
       releases: fn
         "o/r-emacs-master" -> {:ok, manifest}
@@ -148,7 +157,7 @@ defmodule Mix.Tasks.Orchestrate.DecideTest do
 
   test "detect: all channels :empty => every version is first-run (builds)" do
     deps = %{
-      upstream: fn _v -> "newsha" end,
+      upstream: fn _url, _ref -> "newsha" end,
       toolchain: fn -> "test-clt" end,
       releases: fn _repo -> :empty end
     }
