@@ -67,8 +67,9 @@ for attempt in 1 2 3; do
 
   echo ">> gh release create $TAG on $REPO (--latest=false, G1)"
   set +e
+  # Full commit URL (not a bare sha): GitHub renders it as a short emacsmirror/emacs@<sha7> link.
   err="$(gh release create "$TAG" --repo "$REPO" --title "$TAG" --latest=false \
-          --notes "$CHANNEL @ $UPSTREAM_SHA" \
+          --notes "$CHANNEL @ https://github.com/emacsmirror/emacs/commit/$UPSTREAM_SHA" \
           "$HERE/dist/$VERSION/$ASSET" "$HERE/dist/$VERSION/$CHECKSUMS" 2>&1)"
   rc=$?
   set -e
