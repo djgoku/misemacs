@@ -31,6 +31,25 @@ defmodule Mix.Tasks.Release.NamesTest do
     assert out["asset"] == ["misemacs-pregate-smoke-macos-arm64.tar.gz"]
   end
 
+  test "upstream= emitted only with --version (that version's upstream URL)" do
+    with_version =
+      kv(
+        run([
+          "--tag",
+          "emacs-master-2026-06-11",
+          "--version",
+          "master",
+          "--root",
+          ".." | @base_args
+        ])
+      )
+
+    assert with_version["upstream"] == [Orchestrator.Naming.upstream()]
+
+    without_version = kv(run(["--tag", "emacs-master-2026-06-11" | @base_args]))
+    refute Map.has_key?(without_version, "upstream")
+  end
+
   test "bin= lines are exactly Naming.bundle_binaries/0 in order" do
     out = kv(run(["--tag", "t" | @base_args]))
     assert out["bin"] == Orchestrator.Naming.bundle_binaries()

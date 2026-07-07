@@ -82,15 +82,19 @@ defmodule Orchestrator.Manifest do
   end
 
   @doc """
-  The `[%{name, channel, ref}]` version list (for `Core.Decide.plan/4`) parsed from
-  `versions.toml` under `root`. Distinct from `jobs/2`, which crosses in targets.
+  The `[%{name, channel, ref, upstream}]` version list (for `Core.Decide.plan/4`) parsed
+  from `versions.toml` under `root`. `upstream` is the version's OPTIONAL upstream-repo
+  override (nil when absent — resolve via `Naming.upstream/1`). Distinct from `jobs/2`,
+  which crosses in targets.
   """
-  @spec versions!(Path.t()) :: [%{name: String.t(), channel: String.t(), ref: String.t()}]
+  @spec versions!(Path.t()) :: [
+          %{name: String.t(), channel: String.t(), ref: String.t(), upstream: String.t() | nil}
+        ]
   def versions!(root) do
     {:ok, map} = Toml.decode(File.read!(Path.join(root, "versions.toml")))
 
     for {name, v} <- Map.get(map, "versions", %{}) do
-      %{name: name, channel: v["channel"], ref: v["ref"]}
+      %{name: name, channel: v["channel"], ref: v["ref"], upstream: v["upstream"]}
     end
     |> Enum.sort_by(& &1.name)
   end

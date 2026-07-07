@@ -1,11 +1,13 @@
 defmodule Orchestrator.Upstream.GitLsRemote do
-  @moduledoc "Default `Orchestrator.Upstream` — `git ls-remote https://github.com/emacsmirror/emacs <ref>`."
+  @moduledoc """
+  Default `Orchestrator.Upstream` — `git ls-remote <url> <ref>`. The caller supplies the
+  version's upstream URL (already resolved via `Naming.upstream/1`).
+  """
   @behaviour Orchestrator.Upstream
-  @url "https://github.com/emacsmirror/emacs"
 
   @impl true
-  def resolve(ref) do
-    case System.cmd("git", ["ls-remote", @url, ref], stderr_to_stdout: true) do
+  def resolve(url, ref) do
+    case System.cmd("git", ["ls-remote", url, ref], stderr_to_stdout: true) do
       {out, 0} -> parse(out, ref)
       _ -> nil
     end

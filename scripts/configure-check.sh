@@ -24,6 +24,8 @@ PIXI=(mise exec -- pixi)   # pixi pinned in repo mise.toml
 # Read this version's build inputs from its mise env (single source of truth).
 EMACS_REF="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_REF:?EMACS_REF unset}"')"
 EMACS_FLAGS="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_CONFIGURE_FLAGS:?EMACS_CONFIGURE_FLAGS unset}"')"
+# Dir-scoped read (like EMACS_REF): versions/<v>/mise.toml [env] may override the root default.
+EMACS_UPSTREAM="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_UPSTREAM:?EMACS_UPSTREAM unset}"')"
 echo ">> version=$VERSION ref=$EMACS_REF"
 echo ">> flags=$EMACS_FLAGS"
 
@@ -33,7 +35,7 @@ echo ">> [0a] mise-env-pixi activation exposes the pixi toolchain"
 echo ">> [0b] direct pixi fallback (NO mise-env-pixi) exposes the same toolchain"
 "${PIXI[@]}" run --manifest-path "$VDIR/pixi.toml" sh -c 'command -v pkg-config && pkg-config --modversion gnutls libxml-2.0 tree-sitter'
 
-echo ">> [1] fetch emacsmirror/emacs $EMACS_REF (shallow) -> $WORK"
+echo ">> [1] fetch $EMACS_UPSTREAM $EMACS_REF (shallow) -> $WORK"
 mkdir -p "$REPO_ROOT/.work"
 if [ -d "$WORK/.git" ]; then
   git -C "$WORK" fetch --depth 1 origin "$EMACS_REF"
@@ -41,7 +43,7 @@ if [ -d "$WORK/.git" ]; then
 else
   rm -rf "$WORK"
   # --branch accepts a branch or tag (today EMACS_REF=master, a branch); a raw commit SHA would need the fetch path instead.
-  git clone --depth 1 --branch "$EMACS_REF" https://github.com/emacsmirror/emacs "$WORK"
+  git clone --depth 1 --branch "$EMACS_REF" "$EMACS_UPSTREAM" "$WORK"
 fi
 
 echo ">> [2] autogen + configure UNDER the pixi env (direct pixi run = the validated fallback path)"

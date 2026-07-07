@@ -67,4 +67,13 @@ defmodule Orchestrator.NamingTest do
     assert Naming.artifact_base(nil) == "djgoku/misemacs"
     assert Naming.artifact_base() == "djgoku/misemacs"
   end
+
+  test "upstream: per-version override wins; nil falls back to the shared default" do
+    assert Naming.upstream("https://example.test/fork/emacs") ==
+             "https://example.test/fork/emacs"
+
+    # Env-set (mise [env]) and built-in fallback are the same value by design.
+    assert Naming.upstream(nil) == "https://github.com/emacsmirror/emacs"
+    assert Naming.upstream() == "https://github.com/emacsmirror/emacs"
+  end
 end

@@ -96,10 +96,15 @@ defmodule Orchestrator.ManifestTest do
     assert Enum.any?(jobs, &(&1.name == "master" and &1.target == "macos-arm64"))
   end
 
-  test "versions!/1 reads the [%{name,channel,ref}] list from versions.toml under root" do
+  test "versions!/1 reads the [%{name,channel,ref,upstream}] list from versions.toml under root" do
     vs = Manifest.versions!(@fixtures)
-    assert %{name: "master", channel: "master", ref: "master"} in vs
-    assert Enum.any?(vs, &(&1.name == "emacs-30.2" and &1.channel == "30.2"))
+    assert %{name: "master", channel: "master", ref: "master", upstream: nil} in vs
+
+    assert Enum.any?(
+             vs,
+             &(&1.name == "emacs-30.2" and &1.channel == "30.2" and
+                 &1.upstream == "https://example.test/fork/emacs")
+           )
   end
 
   test "merge/2 with nil prior starts from the fragments (first run)" do

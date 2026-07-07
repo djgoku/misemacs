@@ -32,17 +32,27 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     base = Naming.artifact_base(opts[:artifact_base])
     repo = Naming.artifact_repo(base, v.channel)
 
-    IO.puts(render(%{channel: v.channel, ref: v.ref, base: base, repo: repo}))
+    IO.puts(
+      render(%{
+        channel: v.channel,
+        ref: v.ref,
+        base: base,
+        repo: repo,
+        upstream: Naming.upstream(v.upstream)
+      })
+    )
   end
 
-  defp render(%{channel: channel, ref: ref, base: base, repo: repo}) do
+  defp upstream_name(url), do: String.replace_prefix(url, "https://github.com/", "")
+
+  defp render(%{channel: channel, ref: ref, base: base, repo: repo, upstream: upstream}) do
     """
     #+TITLE: misemacs — #{channel} channel (release artifacts)
 
     Auto-published release bucket for the =#{channel}= channel of
     [[https://github.com/#{base}][#{base}]] — a hermetically-built, relocatable =Emacs.app=
     for macOS (arm64), built from the =#{ref}= ref of
-    [[https://github.com/emacsmirror/emacs][emacsmirror/emacs]].
+    [[#{upstream}][#{upstream_name(upstream)}]].
 
     *Nothing here is hand-edited.* Releases are produced by the daily pipeline in
     [[https://github.com/#{base}][#{base}]] and pushed here automatically.

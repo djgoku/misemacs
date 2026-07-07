@@ -9,8 +9,9 @@ defmodule Mix.Tasks.Release.Names do
       # given-tag mode (package / pregate sentinel — skips Core.Tag):
       mix release.names --tag emacs-master-2026-06-11 --os macos --arch arm64
 
-  Output: `key=value` lines — tag, asset, stem, checksums, then one `bin=` line
-  per `Naming.bundle_binaries/0` entry. Bash must parse, never re-derive.
+  Output: `key=value` lines — tag, asset, stem, checksums (+ `upstream=` when `--version`
+  is given: that version's upstream repo URL), then one `bin=` line per
+  `Naming.bundle_binaries/0` entry. Bash must parse, never re-derive.
   """
   use Mix.Task
   alias Orchestrator.{Core.Tag, Manifest, Naming}
@@ -38,7 +39,22 @@ defmodule Mix.Tasks.Release.Names do
     IO.puts("asset=#{Naming.asset_name(tag, os, arch)}")
     IO.puts("stem=#{Naming.asset_stem(tag, os, arch)}")
     IO.puts("checksums=#{Naming.checksums_filename()}")
+    emit_upstream(opts)
     Enum.each(Naming.bundle_binaries(), &IO.puts("bin=#{&1}"))
+  end
+
+  # The version's upstream repo URL (per-version versions.toml override else the shared
+  # default) — publish links release notes to <upstream>/commit/<sha>.
+  defp emit_upstream(opts) do
+    if version = opts[:version] do
+      root = opts[:root] || ".."
+
+      v =
+        Enum.find(Manifest.versions!(root), &(&1.name == version)) ||
+          Mix.raise("no such version #{inspect(version)} in versions.toml")
+
+      IO.puts("upstream=#{Naming.upstream(v.upstream)}")
+    end
   end
 
   # When both --version and --channel are supplied, assert the version's channel in
