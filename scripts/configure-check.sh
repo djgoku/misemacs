@@ -26,6 +26,7 @@ EMACS_REF="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_REF:?EMACS_REF
 EMACS_FLAGS="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_CONFIGURE_FLAGS:?EMACS_CONFIGURE_FLAGS unset}"')"
 # Dir-scoped read (like EMACS_REF): versions/<v>/mise.toml [env] may override the root default.
 EMACS_UPSTREAM="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_UPSTREAM:?EMACS_UPSTREAM unset}"')"
+export EMACS_CPPFLAGS="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_CPPFLAGS:-}"')"
 echo ">> version=$VERSION ref=$EMACS_REF"
 echo ">> flags=$EMACS_FLAGS"
 
@@ -58,7 +59,7 @@ echo ">> [2] autogen + configure UNDER the pixi env (direct pixi run = the valid
   # aborts (no LC_RPATHs found). Phase 2 relocation rewrites these install names, so this
   # build-time rpath is throwaway-validation-only.
   ./autogen.sh
-  ./configure '"$EMACS_FLAGS"' "LDFLAGS=-Wl,-headerpad_max_install_names -Wl,-rpath,$CONDA_PREFIX/lib" 2>&1 | tee "'"$WORK"'/configure.log"
+  ./configure '"$EMACS_FLAGS"' "CPPFLAGS=$EMACS_CPPFLAGS" "LDFLAGS=-Wl,-headerpad_max_install_names -Wl,-rpath,$CONDA_PREFIX/lib" 2>&1 | tee "'"$WORK"'/configure.log"
 '
 
 echo ">> [3] assert feature detection (src/config.h ground truth + configure summary)"
@@ -72,6 +73,10 @@ need HAVE_NS
 none HAVE_NATIVE_COMP
 grep -qE 'window system should Emacs use\?[[:space:]]+nextstep' "$log" || { echo "  MISS summary: window_system=nextstep"; fail=1; }
 grep -qE 'native lisp compiler\?[[:space:]]+no'                "$log" || { echo "  MISS summary: native-comp=no"; fail=1; }
+# EMACS_CONFIG_OPTIONS is the only record that CPPFLAGS reached configure. -F: the value is
+# data from mise.toml, not a pattern. Skipped when empty (the read uses :-).
+[ -z "${EMACS_CPPFLAGS:-}" ] || grep -qF "CPPFLAGS=$EMACS_CPPFLAGS" "$cfg" \
+  || { echo "  MISS config options: CPPFLAGS=$EMACS_CPPFLAGS"; fail=1; }
 [ "$fail" = 0 ] || { echo ">> FAIL: feature detection"; exit 1; }
 echo ">> ALL FEATURES DETECTED (ns, tree-sitter, xml2, gnutls; native-comp OFF)"
 
