@@ -13,6 +13,8 @@ EMACS_REF="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_REF:?}"')"
 EMACS_FLAGS="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_CONFIGURE_FLAGS:?}"')"
 # Dir-scoped read (like EMACS_REF): versions/<v>/mise.toml [env] may override the root default.
 EMACS_UPSTREAM="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_UPSTREAM:?}"')"
+EMACS_CPPFLAGS="$(cd "$VDIR" && mise exec -- sh -c 'printf %s "${EMACS_CPPFLAGS:-}"')"
+export EMACS_CPPFLAGS
 mkdir -p "$OUT"
 echo ">> [1] fetch $EMACS_UPSTREAM $EMACS_REF -> $SRC"
 if [ -d "$SRC/.git" ]; then
@@ -29,7 +31,7 @@ echo ">> [2] configure + make + install UNDER the pixi env"
   # -headerpad_max_install_names: room for install_name rewrites during relocation.
   # -rpath,$CONDA_PREFIX/lib: the in-build DUMP step (temacs --temacs=pbootstrap) must load conda
   #   @rpath dylibs (Phase-1 finding). Relocation deletes this rpath afterward.
-  ./configure '"$EMACS_FLAGS"' "LDFLAGS=-Wl,-headerpad_max_install_names -Wl,-rpath,$CONDA_PREFIX/lib"
+  ./configure '"$EMACS_FLAGS"' "CPPFLAGS=$EMACS_CPPFLAGS" "LDFLAGS=-Wl,-headerpad_max_install_names -Wl,-rpath,$CONDA_PREFIX/lib"
   make -j"$(sysctl -n hw.ncpu)"
   make install
   printf "%s/lib\n" "$CONDA_PREFIX" > "'"$OUT"'/conda-prefix-lib.txt"

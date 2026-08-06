@@ -6,11 +6,15 @@ defmodule Orchestrator.Relocate do
   Mach-O edits are done deep ad-hoc sign the whole bundle (Decision C — single
   `codesign --force --deep --sign -`), verify the signature (`codesign --verify --deep --strict`
   — Phase 3 invariant; Decision F: ad-hoc is sufficient, Developer ID deferred), then gate.
-  Generic over all Mach-O (no ncurses/terminfo special-case —
-  GUI-only, spec §15). Reasoning is pure (`Orchestrator.Macho`); IO via a `Macho.Tool`
-  (default `Orchestrator.Macho.Otool`), injectable for tests.
+  Generic over all Mach-O, with one data-path exception: the terminfo dir baked into
+  bundled ncurses/tinfo as a `__cstring` (`Orchestrator.Terminfo`). Reasoning is pure
+  (`Orchestrator.Macho`); IO via a `Macho.Tool` (default `Orchestrator.Macho.Otool`),
+  injectable for tests.
   """
   alias Orchestrator.Macho
+  alias Orchestrator.Terminfo
+
+  @system_terminfo "/usr/share/terminfo"
 
   @spec run(Path.t(), Path.t(), module) ::
           :ok | {:error, [Macho.violation()] | {:signature_invalid, String.t()}}
@@ -22,6 +26,9 @@ defmodule Orchestrator.Relocate do
 
     copy_closure(machos(app, tool), fw, build_libdir, tool)
     Enum.each(machos(app, tool), &rewrite(&1, fw, tool))
+
+    # BEFORE sign_bundle, so the deep sign covers the edited bytes.
+    patch_terminfo(machos(app, tool), Path.dirname(build_libdir))
 
     # enchant payload (if staged): relocate its subtree BEFORE the single deep sign so the deep
     # sign covers it too — but its Mach-Os are ALSO per-file signed by the payload (spike-1:
@@ -103,6 +110,26 @@ defmodule Orchestrator.Relocate do
   defp resolve("@rpath/" <> base, lib), do: Path.join(lib, base)
   defp resolve("/" <> _ = abs, _lib), do: abs
   defp resolve(_, _), do: nil
+
+  # Repoint bundled ncurses at the macOS system db (why: `Orchestrator.Terminfo`). Not gated —
+  # `-nw` is out of v1 scope (spec §15), so a miss must not fail an otherwise-good GUI bundle.
+  defp patch_terminfo(machos, conda_prefix) do
+    needle = Path.join(conda_prefix, "share/terminfo")
+
+    Enum.each(machos, fn f ->
+      case Terminfo.patch(File.read!(f), needle, @system_terminfo) do
+        {:ok, patched, n} ->
+          File.write!(f, patched)
+          IO.puts("terminfo: #{Path.basename(f)} → #{@system_terminfo} (#{n} ref(s))")
+
+        :unchanged ->
+          :ok
+
+        {:error, reason} ->
+          IO.puts(:stderr, "WARN: terminfo patch skipped for #{f} (#{inspect(reason)})")
+      end
+    end)
+  end
 
   defp rewrite(f, fw, tool) do
     for dep <- tool.deps(f), Macho.classify(dep) == :foreign do

@@ -3,9 +3,9 @@
 # entries for (linux finalize runner), racing builds.hex.pm's precompiled publication —
 # OTP-29.0.3 released 2026-07-02 15:06Z, its ubuntu-24.04 tarball still 404'd 19h later
 # (lab run 28597701653 failed exactly this way). Bump deliberately, with the lock.
-erlang = "29.0.2"
-elixir = "1.20.0-otp-29"
-pixi   = "0.70.2"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
+erlang = "29.0.5"
+elixir = "1.20.3-otp-29"
+pixi   = "0.76.1"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
 
 [env]
 # DEFAULT upstream Emacs repo URL, shared by all versions. Per-version override: `upstream`
@@ -13,6 +13,20 @@ pixi   = "0.70.2"   # EXACT pin (not "latest"): deterministic toolchain_hash; no
 # value in versions/<name>/mise.toml [env] (build scripts' dir-scoped clone) — the ref /
 # EMACS_REF dual-representation pattern. Naming.upstream/1's built-in fallback matches this.
 EMACS_UPSTREAM = "https://github.com/emacsmirror/emacs"
+
+# CPPFLAGS, not CFLAGS: a CFLAGS= on the configure line loses Emacs's -g3 -O2 —
+# configure.ac:1638 only promotes a CFLAGS that configure itself set, then :1671 appends a
+# bare -O. Net is an -O1 build with no debug info, quiet enough that nobody notices.
+# -D ONLY here. src/Makefile.in:444 puts $(CPPFLAGS) BEFORE Emacs's own -I. -I$(srcdir)
+# -I$(lib), so an -I in this value shadows Emacs's headers (e.g. a stale installed config.h).
+# FD_SETSIZE=10000 is the load-bearing one — it sizes both Darwin's fd_set (SDK _fd_def.h
+# :41,:51) and Emacs's per-descriptor process tables (src/process.c:487), the real cap on
+# concurrent subprocesses. Costs ~800 KB BSS and widens the per-select GnuTLS scan at
+# src/process.c:5766 from 1024 to 10000 iterations — raise further only with a reason.
+# _DARWIN_UNLIMITED_SELECT is already implied by _DARWIN_C_SOURCE in config.h; insurance
+# only — if you prune it, keep FD_SETSIZE.
+# Per-version override (versions/<name>/mise.toml [env]) REPLACES this, so restate both.
+EMACS_CPPFLAGS = "-DFD_SETSIZE=10000 -D_DARWIN_UNLIMITED_SELECT"
 
 [plugins]
 # Canonical local-first pixi path (identical in CI). NOT load-bearing: direct `pixi`/`pixi run`
