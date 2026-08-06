@@ -8,6 +8,11 @@ on:
         description: 'Build exactly this version (bypass detect); blank = run detect now'
         type: string
         required: false
+      deploy:
+        description: 'Publish releases + flip Latest. Unchecked = test run (build, package, upload tarball as a run artifact only).'
+        type: boolean
+        default: false
+        required: false
   pull_request:
     paths: ['versions/**', '**/*.toml']
 
@@ -43,17 +48,26 @@ jobs:
           mise install
           (cd orchestrator && mise exec -- mix deps.get)
       - id: decide
+        env:
+          # Via env, not inline ${{ }}: keeps a string input out of the shell's parse tree.
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force_version }}
+          DEPLOY: ${{ inputs.deploy }}
         run: |
           set -euo pipefail
-          EVENT="${{ github.event_name }}"
-          FORCE="${{ inputs.force_version }}"
           if   [ "$EVENT" = "pull_request" ]; then set -- --mode dry-run
           elif [ "$EVENT" = "workflow_dispatch" ] && [ -n "$FORCE" ]; then set -- --mode force --force-version "$FORCE"
           else set -- --mode detect; fi
           # Only the key=value lines go to $GITHUB_OUTPUT — `mise run decide` also emits
           # first-run `mix compile` noise on stdout, which would corrupt the output file.
           mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" | tee /tmp/decide.out
-          grep -E '^(matrix|any|dry_run)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
+          grep -E '^(matrix|any)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
+          # decide only reports dry_run for --mode dry-run, so a manual dispatch would otherwise
+          # publish for real. Publishing is opt-in: dispatch is a test run unless `deploy` is
+          # checked. Overriding here (not the mode) keeps force_version targeting one version.
+          DRY="$(sed -n 's/^dry_run=//p' /tmp/decide.out)"
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$DEPLOY" != "true" ]; then DRY=true; fi
+          echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
           cat /tmp/decide.out >> "$GITHUB_STEP_SUMMARY"
           # Distinct {channel,repo} built this run, for the finalize matrix.
           MATRIX="$(sed -n 's/^matrix=//p' /tmp/decide.out)"
