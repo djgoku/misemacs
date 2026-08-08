@@ -50,6 +50,8 @@ defmodule Orchestrator.NamingTest do
     assert "Emacs.app/Contents/MacOS/bin/emacsclient" in bins
     assert "Emacs.app/Contents/MacOS/bin/etags" in bins
     assert "Emacs.app/Contents/MacOS/bin/ebrowse" in bins
+    # the open(1) launcher rides the same files: mechanism (build-emacs [3.5])
+    assert "Emacs.app/Contents/MacOS/bin/emacs-app" in bins
   end
 
   test "bundle_binaries includes the enchant CLIs under Resources/enchant/bin" do

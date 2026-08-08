@@ -91,8 +91,17 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
 
     * Open it like an app
 
-    The tarball's top-level dir is the stable =misemacs/=, and mise maintains a =latest=
-    symlink per tool — so this path never moves across upgrades. Link it once:
+    Zero setup: every install puts =emacs-app= on your mise =PATH= — it launches the
+    bundled =Emacs.app= through =open=, forwarding any args (fresh instance when args
+    are given):
+
+    #+begin_src sh
+    emacs-app --init-directory ~/my-emacs-config --debug-init
+    #+end_src
+
+    For Finder / Dock / =open -a Emacs= integration: the tarball's top-level dir is the
+    stable =misemacs/=, and mise maintains a =latest= symlink per tool — so this path
+    never moves across upgrades. Link it once:
 
     #+begin_src sh
     mkdir -p ~/Applications

@@ -12,7 +12,7 @@ misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/
 - *GUI (Cocoa/NS) build* with tree-sitter, libxml2, and GnuTLS. JSON is native (no jansson). native-comp is off in v1.
 - *CalVer releases* tagged =emacs-<channel>-YYYY-MM-DD= (e.g. =emacs-master-2026-06-14=, =emacs-31-2026-06-14=), each shipping a =SHASUMS256.txt= and ad-hoc code signatures.
 - *Bundled spell-checking* — [[https://github.com/AbiWord/enchant][enchant]] (with the AppleSpell + Hunspell providers) ships *inside* the app, relocated to resolve from within the bundle, so [[https://github.com/minad/jinx][jinx]] compiles and runs on a clean machine with no Homebrew/system enchant. See *Spell-checking* below.
-- On your =PATH= after install: =Emacs=, =emacsclient=, =etags=, =ebrowse=, plus =enchant-2= and =enchant-lsmod-2= (the bundled spell-checker CLIs).
+- On your =PATH= after install: =Emacs=, =emacsclient=, =etags=, =ebrowse=, =emacs-app= (launches the GUI app via =open=, forwarding args), plus =enchant-2= and =enchant-lsmod-2= (the bundled spell-checker CLIs).
 
 *Scope (v1):* macOS =arm64= only, native-comp disabled, ad-hoc signed (not Developer ID / notarized). See the [[docs/superpowers/specs/2026-06-05-bundled-emacs-build-system-design.md][design spec]] §15 for what is designed-for but deferred (native-comp, more arches/OSes, Developer ID, =-nw=).
 
@@ -40,7 +40,15 @@ mise verifies the downloaded asset against GitHub's release digest. (The first r
 
 ** Open it like an app (=open Emacs.app=)
 
-The tarball's top-level dir is the *stable* =misemacs/= (releases after 2026-08-08), and mise maintains a =latest= symlink per tool — so =…/latest/misemacs/Emacs.app= never moves across upgrades. Link it into =~/Applications= once:
+Zero setup: every install (releases after 2026-08-08) puts =emacs-app= on your mise =PATH= — it launches the bundled =Emacs.app= through =open= (LaunchServices: detached, Dock icon, real app semantics) and forwards any args:
+
+#+begin_src sh
+emacs-app --init-directory ~/my-emacs-config --debug-init
+#+end_src
+
+With args it forces a fresh instance (=open -n=) so they're never silently swallowed by an already-running instance; with no args it focuses/starts the app, like clicking it in Finder.
+
+For Finder, the Dock, and =open -a Emacs= integration: the tarball's top-level dir is the *stable* =misemacs/=, and mise maintains a =latest= symlink per tool — so =…/latest/misemacs/Emacs.app= never moves across upgrades. Link it into =~/Applications= once:
 
 #+begin_src sh
 mkdir -p ~/Applications

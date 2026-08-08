@@ -43,6 +43,8 @@ packages:
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/etags"
           - name: ebrowse
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/ebrowse"
+          - name: emacs-app
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/emacs-app"
           - name: enchant-2
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-2"
           - name: enchant-lsmod-2
@@ -75,6 +77,8 @@ packages:
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/etags"
           - name: ebrowse
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/ebrowse"
+          - name: emacs-app
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/emacs-app"
           - name: enchant-2
             src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-2"
           - name: enchant-lsmod-2

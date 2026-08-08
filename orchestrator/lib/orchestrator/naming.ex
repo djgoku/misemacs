@@ -102,6 +102,9 @@ defmodule Orchestrator.Naming do
       "Emacs.app/Contents/MacOS/bin/emacsclient",
       "Emacs.app/Contents/MacOS/bin/etags",
       "Emacs.app/Contents/MacOS/bin/ebrowse",
+      # open(1) launcher embedded by pipeline/build-emacs [3.5]; absent in releases
+      # before 2026-08-09 — mise skips missing files srcs (probed, mise 2026.8.3).
+      "Emacs.app/Contents/MacOS/bin/emacs-app",
       "Emacs.app/Contents/Resources/enchant/bin/enchant-2",
       "Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2"
     ]

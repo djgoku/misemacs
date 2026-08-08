@@ -47,6 +47,7 @@ echo ">> [4b] stable inner dir (open/~/Applications contract: latest/misemacs/Em
 [ -d "$INSTALL/misemacs/Emacs.app" ] || { echo "FATAL: stable dir misemacs/Emacs.app missing"; exit 1; }
 link="$(readlink "$INSTALL"/misemacs-*)" || true
 [ "$link" = "misemacs" ] || { echo "FATAL: compat symlink is not a symlink -> misemacs (got: '$link')"; exit 1; }
+[ -x "$INSTALL/misemacs/Emacs.app/Contents/MacOS/bin/emacs-app" ] || { echo "FATAL: emacs-app launcher missing/non-executable"; exit 1; }
 echo "E2E-STABLE-DIR-OK"
 
 echo ">> [5] quarantine-free install (E1 invariant via aqua's Go extraction)"
