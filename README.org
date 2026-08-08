@@ -38,6 +38,20 @@ mise exec -- Emacs --version
 
 mise verifies the downloaded asset against GitHub's release digest. (The first release appears once the daily workflow has run — see *How it works* below.)
 
+** Open it like an app (=open Emacs.app=)
+
+The tarball's top-level dir is the *stable* =misemacs/= (releases after 2026-08-08), and mise maintains a =latest= symlink per tool — so =…/latest/misemacs/Emacs.app= never moves across upgrades. Link it into =~/Applications= once:
+
+#+begin_src sh
+mkdir -p ~/Applications
+ln -sfn "$(dirname "$(mise where aqua:djgoku/misemacs-emacs-master)")/latest/misemacs/Emacs.app" ~/Applications/Emacs.app
+#+end_src
+
+Then =open ~/Applications/Emacs.app= (or =open -a Emacs=, Finder, the Dock) launches it like any installed app, and the link survives every =mise up=. Notes:
+
+- The =latest= symlink exists for =@latest= pins (the default above). With a dated pin, link =$(mise where …)/misemacs/Emacs.app= directly and re-link when you bump.
+- Spotlight doesn't index symlinked apps — if you want Spotlight to find it, copy instead of link (the app is fully self-contained, so a copy works unchanged).
+
 ** Per-channel artifact repos
 
 Each channel publishes its releases to its *own* GitHub repo:

@@ -31,6 +31,13 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
     assert out =~ "mise use github:djgoku/misemacs-emacs-31@latest"
   end
 
+  test "README documents the stable-dir open/~/Applications flow (per-channel repo in the link)" do
+    out = gen("master")
+    assert out =~ "latest/misemacs/Emacs.app"
+    assert out =~ ~s[mise where aqua:djgoku/misemacs-emacs-master)")]
+    assert out =~ "open ~/Applications/Emacs.app"
+  end
+
   test "README documents the 3 release assets + verification + source pointer" do
     out = gen("master")
     assert out =~ "build-manifest.json"

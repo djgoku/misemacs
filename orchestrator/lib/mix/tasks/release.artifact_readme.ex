@@ -89,6 +89,20 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     Caveat: the =github:= backend uses the *full tag* as the version
     (=emacs-#{channel}-YYYY-MM-DD=), not the bare date.
 
+    * Open it like an app
+
+    The tarball's top-level dir is the stable =misemacs/=, and mise maintains a =latest=
+    symlink per tool — so this path never moves across upgrades. Link it once:
+
+    #+begin_src sh
+    mkdir -p ~/Applications
+    ln -sfn "$(dirname "$(mise where aqua:#{repo})")/latest/misemacs/Emacs.app" ~/Applications/Emacs.app
+    #+end_src
+
+    Then =open ~/Applications/Emacs.app= / =open -a Emacs= work like any installed app,
+    surviving every =mise up=. (Early releases predate the stable dir; their only
+    top-level entry is the tag-named =misemacs-<tag>-macos-arm64= directory.)
+
     * What's in each release
 
     | asset | what it is |
