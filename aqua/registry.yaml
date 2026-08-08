@@ -6,6 +6,16 @@
 # `asset:` stays the FULL git tag, so the asset template is unchanged from v1.
 # Phase 6: GENERATE this file from versions.toml (one package per channel) so adding
 # a channel stays data-only.
+#
+# TARBALL LAYOUT (v2, releases after 2026-08-08): the real top-level dir is the STABLE
+# `misemacs/` (Naming.inner_dir/0) and the tar ALSO carries a compat symlink named
+# exactly {{.AssetWithoutExt}} -> misemacs, which is what every `src:` below resolves
+# through (older releases: real tag-named dir, no symlink). Do NOT try to branch `src:`
+# by version — mise's aqua backend IGNORES version_constraint/version_overrides (probed
+# on mise 2026.8.3: the top-level branch always wins) — layout compat lives in the tar.
+# The stable dir is the consumer-facing win: installs/<tool>/latest/misemacs/Emacs.app
+# never moves, so one `ln -sfn` into ~/Applications survives `mise up` (README "Open it
+# like an app"). Bound by registry_contract_test.exs + pipeline/package self-verify.
 packages:
   - type: github_release
     name: djgoku/misemacs-emacs-master

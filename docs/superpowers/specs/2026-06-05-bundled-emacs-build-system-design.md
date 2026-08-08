@@ -329,14 +329,22 @@ skip with a warning (never treated as "changed").
   `registry_contract_test.exs` binds it to `lib/naming`. Note: mise (2026.6.1)
   verifies GitHub's per-asset API digest, NOT `SHASUMS256.txt` (P9) — the file
   stays for the aqua contract + audit, and `pipeline/package` self-verifies it.
-- **Internal layout (contractual):** the tarball unpacks to a top dir named exactly
-  like the asset stem, containing:
+- **Internal layout (contractual; v2 as of 2026-08-08):** the tarball unpacks to the
+  **stable** top dir `misemacs/` (`Naming.inner_dir/0`) plus a compat **symlink** named
+  exactly like the asset stem pointing at it:
   ```
-  misemacs-<tag>-macos-arm64/Emacs.app/Contents/MacOS/Emacs
+  misemacs/Emacs.app/Contents/MacOS/Emacs
   …/Contents/MacOS/bin/emacsclient
   …/Contents/MacOS/bin/etags
   …/Contents/MacOS/bin/ebrowse
+  misemacs-<tag>-macos-arm64 -> misemacs
   ```
+  The symlink keeps the registry's `{{.AssetWithoutExt}}/…` `src:` templates resolving
+  on every release era (pre-v2 releases have the tag-named dir for real) — required
+  because mise's aqua backend ignores `version_constraint`/`version_overrides` (probed
+  on mise 2026.8.3, 2026-08-08), so the registry cannot branch `src:` by version. The
+  stable dir gives consumers a version-independent `…/latest/misemacs/Emacs.app` path
+  for `open` / `~/Applications` symlinks (README "Open it like an app").
   Note: `emacsclient/etags/ebrowse` must be placed under `Contents/MacOS/bin/` — validated
   Phase 3: the `--with-ns` `make install` **already** produces exactly this layout, so the
   "bin/ move" is a no-op check, and nothing mutates the bundle after the Phase-2/3 deep

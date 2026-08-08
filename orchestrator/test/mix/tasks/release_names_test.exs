@@ -23,6 +23,7 @@ defmodule Mix.Tasks.Release.NamesTest do
     assert out["tag"] == ["emacs-master-2026-06-11"]
     assert out["asset"] == ["misemacs-emacs-master-2026-06-11-macos-arm64.tar.gz"]
     assert out["stem"] == ["misemacs-emacs-master-2026-06-11-macos-arm64"]
+    assert out["dir"] == ["misemacs"]
     assert out["checksums"] == ["SHASUMS256.txt"]
   end
 

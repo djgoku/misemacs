@@ -17,6 +17,7 @@ defmodule Orchestrator.Naming do
   """
 
   @asset_prefix "misemacs"
+  @inner_dir "misemacs"
   @format "tar.gz"
   @checksums "SHASUMS256.txt"
   @default_base "djgoku/misemacs"
@@ -66,9 +67,28 @@ defmodule Orchestrator.Naming do
   @spec asset_name(String.t(), String.t(), String.t()) :: String.t()
   def asset_name(tag, os, arch), do: "#{asset_stem(tag, os, arch)}.#{@format}"
 
-  @doc "Top-level dir inside the tarball == asset name without the .tar.gz extension."
+  @doc """
+  Asset name without the .tar.gz extension == aqua's `{{.AssetWithoutExt}}`. No longer the
+  tarball's real top-level dir (that's `inner_dir/0`) — the tarball ships a symlink with
+  this name so the registry's `{{.AssetWithoutExt}}/...` srcs resolve on every release era.
+  """
   @spec asset_stem(String.t(), String.t(), String.t()) :: String.t()
   def asset_stem(tag, os, arch), do: "#{@asset_prefix}-#{tag}-#{os}-#{arch}"
+
+  @doc """
+  STABLE top-level dir inside the tarball (constant across releases and channels), so
+  `installs/<tool>/latest/#{@inner_dir}/Emacs.app` never moves and a one-time
+  `ln -sfn` into ~/Applications survives `mise up` (README "Open it like an app").
+
+  The tarball also carries a compat symlink `asset_stem(...)` -> this dir. That symlink is
+  load-bearing: mise's aqua backend IGNORES version_constraint/version_overrides (probed
+  against mise 2026.8.3, 2026-08-08 — the top-level package branch always wins), so
+  aqua/registry.yaml cannot branch `src:` templates by version; `{{.AssetWithoutExt}}`
+  srcs + this symlink are what keep old (real tag-named dir) and new (stable dir)
+  releases installable from ONE registry. Releases before 2026-08-09 have no symlink.
+  """
+  @spec inner_dir() :: String.t()
+  def inner_dir, do: @inner_dir
 
   @doc "Checksums asset filename attached to every release."
   @spec checksums_filename() :: String.t()

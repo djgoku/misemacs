@@ -9,9 +9,10 @@ defmodule Mix.Tasks.Release.Names do
       # given-tag mode (package / pregate sentinel — skips Core.Tag):
       mix release.names --tag emacs-master-2026-06-11 --os macos --arch arm64
 
-  Output: `key=value` lines — tag, asset, stem, checksums (+ `upstream=` when `--version`
-  is given: that version's upstream repo URL), then one `bin=` line per
-  `Naming.bundle_binaries/0` entry. Bash must parse, never re-derive.
+  Output: `key=value` lines — tag, asset, stem, dir (the stable tarball top dir,
+  `Naming.inner_dir/0`), checksums (+ `upstream=` when `--version` is given: that
+  version's upstream repo URL), then one `bin=` line per `Naming.bundle_binaries/0`
+  entry. Bash must parse, never re-derive.
   """
   use Mix.Task
   alias Orchestrator.{Core.Tag, Manifest, Naming}
@@ -38,6 +39,7 @@ defmodule Mix.Tasks.Release.Names do
     IO.puts("tag=#{tag}")
     IO.puts("asset=#{Naming.asset_name(tag, os, arch)}")
     IO.puts("stem=#{Naming.asset_stem(tag, os, arch)}")
+    IO.puts("dir=#{Naming.inner_dir()}")
     IO.puts("checksums=#{Naming.checksums_filename()}")
     emit_upstream(opts)
     Enum.each(Naming.bundle_binaries(), &IO.puts("bin=#{&1}"))
