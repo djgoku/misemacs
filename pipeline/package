@@ -20,16 +20,17 @@ OUT="$HERE/build/$VERSION"; APP="$OUT/Emacs.app"; DIST="$HERE/dist/$VERSION"
 [ -d "$APP" ] || { echo "FATAL: $APP missing — run 'mise run build && mise run relocate' first"; exit 1; }
 
 echo ">> [1] names for tag '$TAG' (given-tag mode — Naming is the sole owner)"
-ASSET=""; STEM=""; CHECKSUMS=""; BINS=()
+ASSET=""; STEM=""; DIR=""; CHECKSUMS=""; BINS=()
 while IFS= read -r line; do
   case "$line" in
     asset=*)     ASSET="${line#asset=}" ;;
     stem=*)      STEM="${line#stem=}" ;;
+    dir=*)       DIR="${line#dir=}" ;;
     checksums=*) CHECKSUMS="${line#checksums=}" ;;
     bin=*)       BINS+=("${line#bin=}") ;;
   esac
 done < <(cd "$HERE/orchestrator" && mise exec -- mix release.names --tag "$TAG" --os macos --arch arm64)
-[ -n "$ASSET" ] && [ -n "$STEM" ] && [ -n "$CHECKSUMS" ] && [ "${#BINS[@]}" -ge 4 ] || { echo "FATAL: release.names output incomplete"; exit 1; }
+[ -n "$ASSET" ] && [ -n "$STEM" ] && [ -n "$DIR" ] && [ -n "$CHECKSUMS" ] && [ "${#BINS[@]}" -ge 4 ] || { echo "FATAL: release.names output incomplete"; exit 1; }
 
 echo ">> [2] layout check (spec §10; check-only, the bundle is sealed)"
 for bin in "${BINS[@]}"; do
@@ -42,30 +43,38 @@ if [ -z "$UPSTREAM_SHA" ]; then
   UPSTREAM_SHA="$(git -C "$OUT/src" rev-parse HEAD)"
 fi
 
-echo ">> [4] stage + xattr-free tar (E7 / spec §10)"
-rm -rf "$DIST"; mkdir -p "$DIST/stage/$STEM"
-cp -Rc "$APP" "$DIST/stage/$STEM/Emacs.app" 2>/dev/null \
-  || { rm -rf "$DIST/stage/$STEM/Emacs.app"; cp -Rp "$APP" "$DIST/stage/$STEM/Emacs.app"; }
-(cd "$DIST/stage" && COPYFILE_DISABLE=1 tar --no-xattrs -czf "../$ASSET" "$STEM")
+echo ">> [4] stage + xattr-free tar (E7 / spec §10; stable dir '$DIR' + compat symlink '$STEM')"
+rm -rf "$DIST"; mkdir -p "$DIST/stage/$DIR"
+cp -Rc "$APP" "$DIST/stage/$DIR/Emacs.app" 2>/dev/null \
+  || { rm -rf "$DIST/stage/$DIR/Emacs.app"; cp -Rp "$APP" "$DIST/stage/$DIR/Emacs.app"; }
+# Compat symlink is load-bearing: the registry's {{.AssetWithoutExt}} srcs resolve through
+# it — mise ignores version_overrides, so layout compat lives in the tar (Naming.inner_dir/0).
+ln -s "$DIR" "$DIST/stage/$STEM"
+(cd "$DIST/stage" && COPYFILE_DISABLE=1 tar --no-xattrs -czf "../$ASSET" "$DIR" "$STEM")
 
 echo ">> [5] checksums ($CHECKSUMS, bare-basename entries)"
 (cd "$DIST" && shasum -a 256 "$ASSET" > "$CHECKSUMS" && shasum -c "$CHECKSUMS")
 
 echo ">> [6] self-verify: tar listing"
 tar -tzf "$DIST/$ASSET" > "$DIST/stage/listing.txt"
-bad="$(grep -v "^$STEM/" "$DIST/stage/listing.txt" || true)"
-[ -z "$bad" ] || { echo "FATAL: entry outside stem dir: $(echo "$bad" | head -1)"; exit 1; }
+# Every entry lives under the stable dir, except the single compat-symlink entry itself.
+bad="$(grep -v -e "^$DIR/" "$DIST/stage/listing.txt" | grep -vxF "$STEM" || true)"
+[ -z "$bad" ] || { echo "FATAL: entry outside stable dir: $(echo "$bad" | head -1)"; exit 1; }
+grep -qxF "$STEM" "$DIST/stage/listing.txt" || { echo "FATAL: compat symlink $STEM missing from tarball"; exit 1; }
 for bin in "${BINS[@]}"; do
-  grep -qxF "$STEM/$bin" "$DIST/stage/listing.txt" || { echo "FATAL: $bin missing from tarball"; exit 1; }
+  grep -qxF "$DIR/$bin" "$DIST/stage/listing.txt" || { echo "FATAL: $bin missing from tarball"; exit 1; }
 done
 
 echo ">> [7] self-verify: extract transport smoke (E7-correct checks)"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 tar -xzf "$DIST/$ASSET" -C "$T"
-"$T/$STEM/Emacs.app/Contents/MacOS/Emacs" --batch --eval '(princ (format "ok %s\n" emacs-version))'
-codesign --verify --strict "$T/$STEM/Emacs.app/Contents/Frameworks/libgnutls.30.dylib"
-codesign --verify --strict "$T/$STEM/Emacs.app/Contents/MacOS/bin/emacsclient"
+[ "$(readlink "$T/$STEM")" = "$DIR" ] || { echo "FATAL: compat symlink did not survive extraction ($STEM -> $DIR)"; exit 1; }
+"$T/$DIR/Emacs.app/Contents/MacOS/Emacs" --batch --eval '(princ (format "ok %s\n" emacs-version))'
+# Same launch THROUGH the compat symlink — the path every aqua/mise files.src resolves.
+"$T/$STEM/Emacs.app/Contents/MacOS/Emacs" --batch --eval '(princ "ok-compat\n")'
+codesign --verify --strict "$T/$DIR/Emacs.app/Contents/Frameworks/libgnutls.30.dylib"
+codesign --verify --strict "$T/$DIR/Emacs.app/Contents/MacOS/bin/emacsclient"
 xcount="$(find "$T" -exec xattr -l {} + 2>/dev/null | grep -c -E 'com\.apple\.(quarantine|cs\.)' || true)"
 [ "$xcount" = "0" ] || { echo "FATAL: $xcount signature/quarantine xattrs survived the tar"; exit 1; }
 rm -rf "$DIST/stage"

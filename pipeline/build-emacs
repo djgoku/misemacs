@@ -41,6 +41,23 @@ appsrc="$(find "$SRC" -maxdepth 3 -type d -name Emacs.app | head -1)"
 [ -n "$appsrc" ] || { echo "FATAL: no Emacs.app produced — confirm the --with-ns self-contained build"; exit 1; }
 echo "   found $appsrc"
 rm -rf "$OUT/Emacs.app"; cp -R "$appsrc" "$OUT/Emacs.app"
+echo ">> [3.5] embed the emacs-app launcher (a registry files: entry — Naming.bundle_binaries/0)"
+# Written HERE (pre-relocate) so the sign step seals it into the bundle — nothing may touch
+# the app after Phase 2/3 sign+verify. $0 resolves to the real path under mise/aqua shims.
+cat > "$OUT/Emacs.app/Contents/MacOS/bin/emacs-app" <<'LAUNCHER'
+#!/bin/sh
+# Launch the surrounding Emacs.app via LaunchServices, forwarding CLI args.
+# With args: open -n (fresh instance) — a running instance would silently ignore --args.
+# Without args: plain open — focus the running instance or start one, like clicking it.
+set -eu
+app="$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)"
+if [ "$#" -gt 0 ]; then
+  exec open -n "$app" --args "$@"
+else
+  exec open "$app"
+fi
+LAUNCHER
+chmod +x "$OUT/Emacs.app/Contents/MacOS/bin/emacs-app"
 echo ">> [4] discovery: otool inventory of the built (pre-reloc) app"
 : > "$OUT/otool-prereloc.txt"
 while IFS= read -r f; do

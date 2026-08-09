@@ -37,9 +37,18 @@ fi
 
 INSTALL="$(mise where "aqua:$REPO@$TAG")"
 echo ">> [4] per-Mach-O sentinel signatures (E7: bundle-level verify is build-time-only)"
+# misemacs-* globs the tag-named COMPAT SYMLINK (stable dir is bare misemacs/, unmatched
+# by the -*) — so these two lines also prove the registry's {{.AssetWithoutExt}} path.
 codesign --verify --strict "$INSTALL"/misemacs-*/Emacs.app/Contents/Frameworks/libgnutls.30.dylib
 codesign --verify --strict "$INSTALL"/misemacs-*/Emacs.app/Contents/MacOS/bin/emacsclient
 echo "E2E-EMBEDDED-SIGS-OK"
+
+echo ">> [4b] stable inner dir (open/~/Applications contract: latest/misemacs/Emacs.app)"
+[ -d "$INSTALL/misemacs/Emacs.app" ] || { echo "FATAL: stable dir misemacs/Emacs.app missing"; exit 1; }
+link="$(readlink "$INSTALL"/misemacs-*)" || true
+[ "$link" = "misemacs" ] || { echo "FATAL: compat symlink is not a symlink -> misemacs (got: '$link')"; exit 1; }
+[ -x "$INSTALL/misemacs/Emacs.app/Contents/MacOS/bin/emacs-app" ] || { echo "FATAL: emacs-app launcher missing/non-executable"; exit 1; }
+echo "E2E-STABLE-DIR-OK"
 
 echo ">> [5] quarantine-free install (E1 invariant via aqua's Go extraction)"
 qcount="$(find "$INSTALL" -exec xattr -l {} + 2>/dev/null | grep -c com.apple.quarantine || true)"

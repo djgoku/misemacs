@@ -25,10 +25,19 @@ defmodule Orchestrator.NamingTest do
     assert Naming.asset_name(@tag_str, "macos", "aarch64") =~ "-aarch64.tar.gz"
   end
 
-  test "asset_stem is the asset name without .tar.gz (the tarball top dir)" do
+  test "asset_stem is the asset name without .tar.gz (aqua's {{.AssetWithoutExt}})" do
     name = Naming.asset_name(@tag_str, "macos", "arm64")
     stem = Naming.asset_stem(@tag_str, "macos", "arm64")
     assert name == stem <> ".tar.gz"
+  end
+
+  test "inner_dir is the stable tarball top dir, never colliding with a stem" do
+    assert Naming.inner_dir() == "misemacs"
+    # Stems are "misemacs-<tag>-…", so the tag-named compat symlink (named asset_stem)
+    # can coexist with the stable dir in one tarball — pipeline/package relies on this.
+    stem = Naming.asset_stem(@tag_str, "macos", "arm64")
+    assert String.starts_with?(stem, Naming.inner_dir() <> "-")
+    refute stem == Naming.inner_dir()
   end
 
   test "checksums filename is SHASUMS256.txt" do
@@ -41,6 +50,8 @@ defmodule Orchestrator.NamingTest do
     assert "Emacs.app/Contents/MacOS/bin/emacsclient" in bins
     assert "Emacs.app/Contents/MacOS/bin/etags" in bins
     assert "Emacs.app/Contents/MacOS/bin/ebrowse" in bins
+    # the open(1) launcher rides the same files: mechanism (build-emacs [3.5])
+    assert "Emacs.app/Contents/MacOS/bin/emacs-app" in bins
   end
 
   test "bundle_binaries includes the enchant CLIs under Resources/enchant/bin" do
