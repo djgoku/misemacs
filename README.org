@@ -18,10 +18,10 @@ misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/
 
 * Install
 
-misemacs ships its own single-file aqua registry ([[aqua/registry.yaml][=aqua/registry.yaml=]]) with *one package per channel* — =djgoku/misemacs-emacs-master= and =djgoku/misemacs-emacs-31=. Point mise at it, then install the channel you want:
+misemacs ships its own single-file aqua registry ([[registry.yaml][=registry.yaml=]], at the repo root) with *one package per channel* — =djgoku/misemacs-emacs-master= and =djgoku/misemacs-emacs-31=. Point mise at this repo, then install the channel you want:
 
 #+begin_src sh
-export MISE_AQUA_REGISTRIES=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml
+export MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs
 
 # the most recent master build (swap in -emacs-31 for the Emacs 31 line):
 mise use aqua:djgoku/misemacs-emacs-master@latest
@@ -69,7 +69,7 @@ Each channel publishes its releases to its *own* GitHub repo:
 | =aqua:djgoku/misemacs-emacs-master= | [[https://github.com/djgoku/misemacs-emacs-master][=djgoku/misemacs-emacs-master=]]      |
 | =aqua:djgoku/misemacs-emacs-31=     | [[https://github.com/djgoku/misemacs-emacs-31][=djgoku/misemacs-emacs-31=]]          |
 
-The aqua *package names* are unchanged; only the underlying repo each package reads from has changed. The registry itself ([[aqua/registry.yaml][=aqua/registry.yaml=]]) still lives here in =djgoku/misemacs=, and =MISE_AQUA_REGISTRIES= continues to point at it.
+The aqua *package names* are unchanged; only the underlying repo each package reads from has changed. The registry itself ([[registry.yaml][=registry.yaml=]]) still lives here in =djgoku/misemacs=, and =MISE_AQUA_REGISTRIES= continues to point at it.
 
 *Why separate repos?* mise (via aqua) fetches only the first ~100 entries of a repo's tag/release list. If both channels shared a single repo, a high-frequency channel (e.g. =master=, built daily) would eventually push a low-frequency channel's tags off that page, making older — or even all — versions of that channel uninstallable. One repo per channel eliminates the interference.
 
@@ -149,7 +149,7 @@ misemacs/
 ├── orchestrator/          # Elixir brain: pure decision fns + Mix tasks (ExUnit-tested)
 ├── pipeline/              # bash stages: build-emacs, package, publish, promote
 ├── scripts/               # configure-check, e2e-aqua-install
-├── aqua/registry.yaml     # the vendored aqua registry users consume
+├── registry.yaml          # the vendored aqua registry users consume (root ⇒ short registry URL)
 ├── mise.toml              # shared task seam (test/lint/build/decide/finalize/…)
 └── .github/workflows/     # daily.yml (the automation) + orchestrator-ci.yml
 #+end_example
@@ -162,7 +162,7 @@ A "build" is a *version*: one row in =versions.toml= plus a =versions/<name>/= d
 
 1. Add a row to [[versions.toml][=versions.toml=]] (=ref = "emacs-31"=, =channel = "31"= → tag =emacs-31-YYYY-MM-DD=).
 2. Add a [[versions/emacs-31/][=versions/emacs-31/=]] directory copied from =master/= with =EMACS_REF= flipped to =emacs-31=. The =pixi.lock= is reused verbatim since build dependencies don't depend on the Emacs version.
-3. Add a package entry to [[aqua/registry.yaml][=aqua/registry.yaml=]] pointing at =repo_name: misemacs-emacs-<channel>= (copy an existing entry and adjust =name=, =repo_name=, =description=, and =version_prefix=).
+3. Add a package entry to [[registry.yaml][=registry.yaml=]] pointing at =repo_name: misemacs-emacs-<channel>= (copy an existing entry and adjust =name=, =repo_name=, =description=, and =version_prefix=).
 4. Create the artifact repo and seed it with its generated README (one-time — the README is the required initial commit; without it GitHub returns =HTTP 422 "Repository is empty"= on the first release):
    #+begin_src sh
    gh repo create djgoku/misemacs-emacs-<channel> --public

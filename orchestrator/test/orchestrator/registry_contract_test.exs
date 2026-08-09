@@ -3,13 +3,14 @@ defmodule Orchestrator.RegistryContractTest do
   alias Orchestrator.Naming
 
   @moduledoc """
-  Binds the VENDORED consumer registry (aqua/registry.yaml — what
-  MISE_AQUA_REGISTRIES serves from this repo's main) to Orchestrator.Naming.
+  Binds the VENDORED consumer registry (registry.yaml at the repo ROOT — what
+  MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs serves from main) to
+  Orchestrator.Naming.
   Line-presence checks on the small, stable YAML — deliberately no YAML dep.
   Drift in either direction must break the suite (spec G5/P7).
   """
 
-  @registry_path Path.expand("../../../aqua/registry.yaml", __DIR__)
+  @registry_path Path.expand("../../../registry.yaml", __DIR__)
 
   setup_all do
     %{

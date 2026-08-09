@@ -74,7 +74,7 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     ** 2. Point mise at the misemacs registry (interim)
 
     #+begin_src sh
-    MISE_AQUA_REGISTRIES=https://raw.githubusercontent.com/#{base}/main/aqua/registry.yaml \\
+    MISE_AQUA_REGISTRIES=https://github.com/#{base} \\
       mise use aqua:#{repo}@latest
     #+end_src
 
