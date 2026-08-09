@@ -2,7 +2,7 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
   use ExUnit.Case, async: true
   import ExUnit.CaptureIO
 
-  @registry "MISE_AQUA_REGISTRIES=https://raw.githubusercontent.com/djgoku/misemacs/main/aqua/registry.yaml"
+  @registry "MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs"
 
   defp gen(version),
     do:

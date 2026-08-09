@@ -1,4 +1,9 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/registry.json
+# This file lives at the repo ROOT so mise resolves the short registry URL
+# `MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs` (a github.com
+# <owner>/<repo> URL is only ever probed for registry.yaml at the root).
+# Local test: MISE_AQUA_REGISTRIES=file://$PWD/registry.yaml mise ls-remote aqua:djgoku/misemacs-emacs-master
+#
 # One package per channel (Phase 5, hand-maintained). The version-prefix strips the
 # `emacs-<channel>-` tag prefix so each package's versions are bare CalVer dates
 # (e.g. 2026-06-14) that `mise use @latest` / `mise up` roll within that channel —

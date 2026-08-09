@@ -3,7 +3,7 @@ defmodule Orchestrator.Naming do
   SOLE owner of release tag / asset / checksum name strings.
 
   These MUST match the consumed aqua registry template — the vendored
-  `aqua/registry.yaml` in this repo, bound here by `registry_contract_test.exs`
+  `registry.yaml` at this repo's root, bound here by `registry_contract_test.exs`
   (Phase 4, P7/G5; the `djgoku/aqua-registry@feat/...` branch is a PR-shaped copy,
   not the file `MISE_AQUA_REGISTRIES` serves):
 
@@ -83,7 +83,7 @@ defmodule Orchestrator.Naming do
   The tarball also carries a compat symlink `asset_stem(...)` -> this dir. That symlink is
   load-bearing: mise's aqua backend IGNORES version_constraint/version_overrides (probed
   against mise 2026.8.3, 2026-08-08 — the top-level package branch always wins), so
-  aqua/registry.yaml cannot branch `src:` templates by version; `{{.AssetWithoutExt}}`
+  registry.yaml cannot branch `src:` templates by version; `{{.AssetWithoutExt}}`
   srcs + this symlink are what keep old (real tag-named dir) and new (stable dir)
   releases installable from ONE registry. Releases before 2026-08-09 have no symlink.
   """
