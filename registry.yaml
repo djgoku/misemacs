@@ -57,6 +57,40 @@ packages:
     replacements:
       darwin: macos
   - type: github_release
+    name: djgoku/misemacs-emacs-30
+    version_source: github_tag
+    repo_owner: djgoku
+    repo_name: misemacs-emacs-30
+    description: Hermetically-built relocatable Emacs.app for macOS — emacs-30 channel
+    version_prefix: "emacs-30-"
+    asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
+    format: tar.gz
+    checksum:
+      type: github_release
+      asset: SHASUMS256.txt
+      algorithm: sha256
+    supported_envs:
+      - darwin/arm64
+    overrides:
+      - goos: darwin
+        files:
+          - name: emacs
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/Emacs"
+          - name: emacsclient
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/emacsclient"
+          - name: etags
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/etags"
+          - name: ebrowse
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/ebrowse"
+          - name: emacs-app
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/MacOS/bin/emacs-app"
+          - name: enchant-2
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-2"
+          - name: enchant-lsmod-2
+            src: "{{.AssetWithoutExt}}/Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2"
+    replacements:
+      darwin: macos
+  - type: github_release
     name: djgoku/misemacs-emacs-31
     version_source: github_tag
     repo_owner: djgoku

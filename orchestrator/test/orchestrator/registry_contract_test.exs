@@ -11,10 +11,15 @@ defmodule Orchestrator.RegistryContractTest do
   """
 
   @registry_path Path.expand("../../../registry.yaml", __DIR__)
+  @versions_path Path.expand("../../../versions.toml", __DIR__)
 
   setup_all do
+    {:ok, versions_toml} = File.read(@versions_path)
+    {:ok, %{"versions" => versions}} = Toml.decode(versions_toml)
+
     %{
       registry: File.read!(@registry_path),
+      versions: versions,
       # Naming.asset_name/3 is pure interpolation, so feeding it the aqua
       # placeholders yields the registry template — ONE source binding the
       # file-presence and rendering assertions below (no retyped literal).
@@ -73,8 +78,11 @@ defmodule Orchestrator.RegistryContractTest do
     assert length(Regex.scan(~r/src: "/, reg)) == length(Naming.bundle_binaries()) * n_packages
   end
 
-  test "one version_prefix package per channel (name + prefix bound)", %{registry: reg} do
-    for channel <- ["master", "31"] do
+  test "one version_prefix package per manifest channel (name + prefix bound)", %{
+    registry: reg,
+    versions: versions
+  } do
+    for {_name, %{"channel" => channel}} <- versions do
       assert reg =~ "name: djgoku/misemacs-emacs-#{channel}"
       assert reg =~ ~s(version_prefix: "emacs-#{channel}-")
     end
@@ -87,16 +95,23 @@ defmodule Orchestrator.RegistryContractTest do
     assert Regex.scan(~r/-\s+(\S+)/, envs_block, capture: :all_but_first) == [["darwin/arm64"]]
   end
 
-  test "each package points at its per-channel artifact repo", %{registry: reg} do
-    assert reg =~ "repo_name: misemacs-emacs-master"
-    assert reg =~ "repo_name: misemacs-emacs-31"
+  test "each package points at its per-channel artifact repo", %{
+    registry: reg,
+    versions: versions
+  } do
+    for {_name, %{"channel" => channel}} <- versions do
+      assert reg =~ "repo_name: misemacs-emacs-#{channel}"
+    end
 
     # Negative guard: no package may point at the bare shared source repo — a future
     # package must use its own per-channel artifact repo (plan Task 8).
     refute reg =~ ~r/repo_name:\s*misemacs\b(?!-)/
   end
 
-  test "both packages keep version_source: github_tag", %{registry: reg} do
-    assert length(Regex.scan(~r/version_source:\s*github_tag/, reg)) == 2
+  test "all manifest packages keep version_source: github_tag", %{
+    registry: reg,
+    versions: versions
+  } do
+    assert length(Regex.scan(~r/version_source:\s*github_tag/, reg)) == map_size(versions)
   end
 end

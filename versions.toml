@@ -14,3 +14,7 @@ channel = "master"    # used in the tag: emacs-master-YYYY-MM-DD
 [versions.emacs-31]
 ref = "emacs-31"      # the emacs-31 release branch in emacsmirror/emacs
 channel = "31"        # used in the tag: emacs-31-YYYY-MM-DD
+
+[versions.emacs-30]
+ref = "emacs-30"      # the emacs-30 release branch in emacsmirror/emacs
+channel = "30"        # used in the tag: emacs-30-YYYY-MM-DD
