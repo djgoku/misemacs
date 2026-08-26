@@ -20,4 +20,15 @@ defmodule Orchestrator.VersionLayoutTest do
     assert names != [], "versions.toml has no [versions.*] entries"
     assert Manifest.missing_version_files(@repo_root, names) == []
   end
+
+  test "emacs-30 stays on the pre-0.26 tree-sitter ABI it builds against" do
+    version_dir = Path.join([@repo_root, "versions", "emacs-30"])
+    {:ok, pixi_toml} = File.read(Path.join(version_dir, "pixi.toml"))
+    {:ok, pixi_config} = Toml.decode(pixi_toml)
+    {:ok, pixi_lock} = File.read(Path.join(version_dir, "pixi.lock"))
+
+    assert get_in(pixi_config, ["dependencies", "libtree-sitter"]) == ">=0.25,<0.26"
+    assert pixi_lock =~ ~r/libtree-sitter-0\.25\.\d+-/
+    refute pixi_lock =~ ~r/libtree-sitter-0\.26\.\d+-/
+  end
 end

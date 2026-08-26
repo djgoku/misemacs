@@ -1,0 +1,14 @@
+# Per-version build env for emacs-30. Adding a version = copy this dir + a versions.toml row.
+[env]
+EMACS_REF = "emacs-30"   # git ref in emacsmirror/emacs (the emacs-30 release branch)
+
+# native-comp OFF (v1, no libgccjit); JSON is native on this branch (built-in parser, no jansson).
+# ncurses links from the pixi env (texinfo pulls it); GUI-only v1 bundles it generically during
+# relocation, but no terminal-mode promise until the §15 fast-follow. CPPFLAGS here REPLACES the
+# root value (mise config merge), so keep FD_SETSIZE + _DARWIN_UNLIMITED_SELECT in sync with root.
+EMACS_CONFIGURE_FLAGS = "--with-ns --without-native-compilation --with-tree-sitter --with-xml2 --with-gnutls"
+EMACS_CPPFLAGS = "-DFD_SETSIZE=10000 -D_DARWIN_UNLIMITED_SELECT"
+
+# mise-env-pixi: entering this directory (mise --cd versions/emacs-30) puts autoconf /
+# automake / makeinfo on PATH and exposes the gnutls/libxml2/tree-sitter libs+headers.
+_.pixi-env = { tools = true, manifest_path = "./pixi.toml" }

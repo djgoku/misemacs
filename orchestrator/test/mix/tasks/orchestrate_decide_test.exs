@@ -98,6 +98,7 @@ defmodule Mix.Tasks.Orchestrate.DecideTest do
       upstream: fn _url, _ref -> "sha" end,
       toolchain: fn -> "test-clt" end,
       releases: fn
+        "djgoku/misemacs-emacs-30" -> :empty
         "djgoku/misemacs-emacs-31" -> {:error, :unauthorized}
         "djgoku/misemacs-emacs-master" -> :empty
         other -> flunk("unexpected repo #{other}")
