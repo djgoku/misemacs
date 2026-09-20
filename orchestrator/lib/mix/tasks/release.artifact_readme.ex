@@ -84,13 +84,13 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     emacs-app --init-directory ~/my-emacs-config --debug-init
     #+end_src
 
-    For Finder / Dock / =open -a Emacs= integration: the tarball's top-level dir is the
-    stable =misemacs/=, and mise maintains a =latest= symlink per tool — so this path
-    never moves across upgrades. Link it once:
+    For Finder / Dock / =open -a Emacs= integration: Packslip installs the app
+    directly under the version directory and mise maintains a =latest= symlink
+    per tool, so this path never moves across upgrades. Link it once:
 
     #+begin_src sh
     mkdir -p ~/Applications
-    ln -sfn "$(dirname "$(mise where packslip:github.com/#{repo})")/latest/misemacs/Emacs.app" ~/Applications/Emacs.app
+    ln -sfn "$(dirname "$(mise where packslip:github.com/#{repo})")/latest/Emacs.app" ~/Applications/Emacs.app
     #+end_src
 
     Then =open ~/Applications/Emacs.app= / =open -a Emacs= work like any installed app,

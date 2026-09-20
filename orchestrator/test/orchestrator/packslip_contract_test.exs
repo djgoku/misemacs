@@ -16,6 +16,9 @@ defmodule Orchestrator.PackslipContractTest do
   test "packslip executable declarations match the packaged app" do
     workflow = File.read!(@workflow)
 
+    assert workflow =~ "emacs=misemacs/Emacs.app/Contents/MacOS/bin/emacs-cli"
+    assert workflow =~ "Emacs=misemacs/Emacs.app/Contents/MacOS/bin/emacs-cli"
+
     for path <- Naming.bundle_binaries() do
       assert workflow =~ "=misemacs/#{path}", "missing Packslip executable #{path}"
     end

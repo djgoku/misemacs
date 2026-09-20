@@ -10,7 +10,8 @@ TAG="${2:?missing tag}"
 TOOL="packslip:github.com/$REPO@${TAG#v}"
 export MISE_DATA_DIR; MISE_DATA_DIR="$(mktemp -d)"
 export MISE_CACHE_DIR; MISE_CACHE_DIR="$(mktemp -d)"   # separate from DATA — both must be fresh (P8 gotcha)
-export MISE_GLOBAL_CONFIG_FILE; MISE_GLOBAL_CONFIG_FILE="$(mktemp)"
+export MISE_GLOBAL_CONFIG_FILE; MISE_GLOBAL_CONFIG_FILE="$(mktemp -d)/config.toml"
+: > "$MISE_GLOBAL_CONFIG_FILE"
 export MISE_YES=1
 cd "$(mktemp -d)"
 
@@ -29,13 +30,14 @@ fi
 
 INSTALL="$(mise where "$TOOL")"
 echo ">> [4] per-Mach-O sentinel signatures (E7: bundle-level verify is build-time-only)"
-codesign --verify --strict "$INSTALL/misemacs/Emacs.app/Contents/Frameworks/libgnutls.30.dylib"
-codesign --verify --strict "$INSTALL/misemacs/Emacs.app/Contents/MacOS/bin/emacsclient"
+codesign --verify --strict "$INSTALL/Emacs.app/Contents/Frameworks/libgnutls.30.dylib"
+codesign --verify --strict "$INSTALL/Emacs.app/Contents/MacOS/bin/emacsclient"
 echo "E2E-EMBEDDED-SIGS-OK"
 
-echo ">> [4b] stable inner dir (open/~/Applications contract: latest/misemacs/Emacs.app)"
-[ -d "$INSTALL/misemacs/Emacs.app" ] || { echo "FATAL: stable dir misemacs/Emacs.app missing"; exit 1; }
-[ -x "$INSTALL/misemacs/Emacs.app/Contents/MacOS/bin/emacs-app" ] || { echo "FATAL: emacs-app launcher missing/non-executable"; exit 1; }
+echo ">> [4b] installed app path (open/~/Applications contract: latest/Emacs.app)"
+[ -d "$INSTALL/Emacs.app" ] || { echo "FATAL: installed Emacs.app missing"; exit 1; }
+[ -x "$INSTALL/Emacs.app/Contents/MacOS/bin/emacs-app" ] || { echo "FATAL: emacs-app launcher missing/non-executable"; exit 1; }
+[ -x "$INSTALL/Emacs.app/Contents/MacOS/bin/emacs-cli" ] || { echo "FATAL: emacs-cli launcher missing/non-executable"; exit 1; }
 echo "E2E-STABLE-DIR-OK"
 
 echo ">> [5] quarantine-free install"

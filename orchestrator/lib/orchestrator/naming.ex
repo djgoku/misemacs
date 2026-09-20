@@ -92,7 +92,7 @@ defmodule Orchestrator.Naming do
   @spec bundle_binaries() :: [String.t()]
   def bundle_binaries do
     [
-      "Emacs.app/Contents/MacOS/Emacs",
+      "Emacs.app/Contents/MacOS/bin/emacs-cli",
       "Emacs.app/Contents/MacOS/bin/emacsclient",
       "Emacs.app/Contents/MacOS/bin/etags",
       "Emacs.app/Contents/MacOS/bin/ebrowse",

@@ -21,8 +21,8 @@ jobs:
           # its digest; it does not claim to have built the archive.
           attest: 'false'
           bin: >-
-            emacs=misemacs/Emacs.app/Contents/MacOS/Emacs
-            Emacs=misemacs/Emacs.app/Contents/MacOS/Emacs
+            emacs=misemacs/Emacs.app/Contents/MacOS/bin/emacs-cli
+            Emacs=misemacs/Emacs.app/Contents/MacOS/bin/emacs-cli
             emacsclient=misemacs/Emacs.app/Contents/MacOS/bin/emacsclient
             etags=misemacs/Emacs.app/Contents/MacOS/bin/etags
             ebrowse=misemacs/Emacs.app/Contents/MacOS/bin/ebrowse

@@ -27,9 +27,10 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
     refute out =~ "aqua:"
   end
 
-  test "README documents the stable-dir open/~/Applications flow (per-channel repo in the link)" do
+  test "README documents the Packslip install path for open/~/Applications" do
     out = gen("master")
-    assert out =~ "latest/misemacs/Emacs.app"
+    assert out =~ "latest/Emacs.app"
+    refute out =~ "latest/misemacs/Emacs.app"
     assert out =~ ~s[mise where packslip:github.com/djgoku/misemacs-emacs-master)")]
     assert out =~ "open ~/Applications/Emacs.app"
     assert out =~ "emacs-app --init-directory"

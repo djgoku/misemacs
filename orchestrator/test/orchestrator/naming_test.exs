@@ -43,7 +43,7 @@ defmodule Orchestrator.NamingTest do
 
   test "bundle binaries match Packslip's expected extract paths" do
     bins = Naming.bundle_binaries()
-    assert "Emacs.app/Contents/MacOS/Emacs" in bins
+    assert "Emacs.app/Contents/MacOS/bin/emacs-cli" in bins
     assert "Emacs.app/Contents/MacOS/bin/emacsclient" in bins
     assert "Emacs.app/Contents/MacOS/bin/etags" in bins
     assert "Emacs.app/Contents/MacOS/bin/ebrowse" in bins
