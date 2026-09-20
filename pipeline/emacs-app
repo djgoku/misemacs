@@ -1,0 +1,22 @@
+#!/bin/sh
+# Launch the surrounding Emacs.app via LaunchServices, forwarding CLI args.
+# Packslip exposes this script through a mise-managed symlink, so resolve it
+# before locating the enclosing app.
+set -eu
+
+self=$0
+while [ -L "$self" ]; do
+  dir="$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)"
+  target="$(readlink "$self")"
+  case "$target" in
+    /*) self=$target ;;
+    *) self=$dir/$target ;;
+  esac
+done
+app="$(CDPATH= cd -- "$(dirname -- "$self")/../../.." && pwd)"
+
+if [ "$#" -gt 0 ]; then
+  exec open -n "$app" --args "$@"
+else
+  exec open "$app"
+fi
