@@ -36,6 +36,16 @@ defmodule Orchestrator.Releases.GhTest do
              Gh.classify({:ok, ["emacs-31-2026-06-28", "emacs-31-2026-06-29"]}, fetched)
   end
 
+  test "classify: Packslip CalVer tags sort numerically across months" do
+    fetched = fn
+      "v2026.10.0" -> %{"versions" => %{"master" => %{}}}
+      other -> flunk("expected October first, got #{other}")
+    end
+
+    assert {:ok, %{"versions" => _}} =
+             Gh.classify({:ok, ["v2026.9.11", "v2026.10.0"]}, fetched)
+  end
+
   test "classify: scans back past a manifest-less newest (in-flight release) to an older manifest" do
     # The newest tag is published this run but its manifest is attached later by finalize,
     # so the newest may legitimately lack one — fall back to the previous release's state.

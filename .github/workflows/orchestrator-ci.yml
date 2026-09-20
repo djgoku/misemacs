@@ -1,7 +1,7 @@
 name: orchestrator-ci
 on:
   pull_request:
-    paths: ["orchestrator/**", "mise.toml", "mise.lock", ".github/workflows/orchestrator-ci.yml"]
+    paths: ["orchestrator/**", "templates/**", "mise.toml", "mise.lock", ".github/workflows/orchestrator-ci.yml"]
 permissions:
   contents: read
 jobs:

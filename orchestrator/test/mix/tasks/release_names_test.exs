@@ -27,9 +27,9 @@ defmodule Mix.Tasks.Release.NamesTest do
     assert out["checksums"] == ["SHASUMS256.txt"]
   end
 
-  test "given-tag mode works for arbitrary sentinel tags (pregate)" do
-    out = kv(run(["--tag", "pregate-smoke" | @base_args]))
-    assert out["asset"] == ["misemacs-pregate-smoke-macos-arm64.tar.gz"]
+  test "given-tag mode works for arbitrary sentinel tags" do
+    out = kv(run(["--tag", "smoke-test" | @base_args]))
+    assert out["asset"] == ["misemacs-smoke-test-macos-arm64.tar.gz"]
   end
 
   test "upstream= emitted only with --version (that version's upstream URL)" do
@@ -62,29 +62,29 @@ defmodule Mix.Tasks.Release.NamesTest do
     out =
       kv(run(["--channel", "master", "--date", "2026-06-11", "--tags-file", tags | @base_args]))
 
-    assert out["tag"] == ["emacs-master-2026-06-11"]
+    assert out["tag"] == ["v2026.6.0"]
   end
 
-  test "snapshot mode appends .N on same-day collision" do
-    tags = write_tags(["emacs-master-2026-06-11", "emacs-master-2026-06-11.1"])
+  test "snapshot mode increments the patch on same-day collision" do
+    tags = write_tags(["v2026.6.0", "v2026.6.1"])
 
     out =
       kv(run(["--channel", "master", "--date", "2026-06-11", "--tags-file", tags | @base_args]))
 
-    assert out["tag"] == ["emacs-master-2026-06-11.2"]
-    assert out["asset"] == ["misemacs-emacs-master-2026-06-11.2-macos-arm64.tar.gz"]
+    assert out["tag"] == ["v2026.6.2"]
+    assert out["asset"] == ["misemacs-v2026.6.2-macos-arm64.tar.gz"]
   end
 
   test "snapshot mode reads the snapshot from stdin with --tags-file -" do
     out =
-      capture_io("emacs-master-2026-06-11\n", fn ->
+      capture_io("v2026.6.0\n", fn ->
         Mix.Task.rerun(
           "release.names",
           ["--channel", "master", "--date", "2026-06-11", "--tags-file", "-" | @base_args]
         )
       end)
 
-    assert kv(out)["tag"] == ["emacs-master-2026-06-11.1"]
+    assert kv(out)["tag"] == ["v2026.6.1"]
   end
 
   test "version+channel match (master→master) succeeds without error" do
@@ -107,7 +107,7 @@ defmodule Mix.Tasks.Release.NamesTest do
         ])
       )
 
-    assert out["tag"] == ["emacs-master-2026-06-11"]
+    assert out["tag"] == ["v2026.6.0"]
   end
 
   test "version+channel mismatch (master version, channel 31) raises Mix.Error" do

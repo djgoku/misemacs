@@ -59,35 +59,20 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
 
     * Install (mise)
 
-    Methods in order of preference.
-
-    ** 1. aqua registry (zero-config) — coming soon
-
-    Once this package is in the upstream aqua-registry, no setup is needed:
+    Each new release carries a signed =packslip.sigstore.json=. mise verifies the
+    artifact repository's signing identity and the selected archive's digest.
 
     #+begin_src sh
-    mise use aqua:#{repo}@latest
+    mise use packslip:github.com/#{repo}@latest
+    # Or pin a published release:
+    mise use packslip:github.com/#{repo}@YYYY.M.N
     #+end_src
 
-    (Not yet submitted upstream — use method 2 or 3 until then.)
-
-    ** 2. Point mise at the misemacs registry (interim)
-
-    #+begin_src sh
-    MISE_AQUA_REGISTRIES=https://github.com/#{base} \\
-      mise use aqua:#{repo}@latest
-    #+end_src
-
-    Versions resolve as the bare date (=YYYY-MM-DD=); =@latest= rolls this channel forward.
-
-    ** 3. GitHub backend (no registry config)
-
-    #+begin_src sh
-    mise use github:#{repo}@latest
-    #+end_src
-
-    Caveat: the =github:= backend uses the *full tag* as the version
-    (=emacs-#{channel}-YYYY-MM-DD=), not the bare date.
+    This requires a mise version with the Packslip backend. Existing releases from
+    before the migration have no Packslip bundle; their tags and assets remain on
+    GitHub for manual download. Install a new signed release through =packslip:=.
+    mise's default 24-hour minimum release age can delay =@latest=; exact pins
+    are available as soon as their Packslip has been signed.
 
     * Open it like an app
 
@@ -99,18 +84,17 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     emacs-app --init-directory ~/my-emacs-config --debug-init
     #+end_src
 
-    For Finder / Dock / =open -a Emacs= integration: the tarball's top-level dir is the
-    stable =misemacs/=, and mise maintains a =latest= symlink per tool — so this path
-    never moves across upgrades. Link it once:
+    For Finder / Dock / =open -a Emacs= integration: Packslip installs the app
+    directly under the version directory and mise maintains a =latest= symlink
+    per tool, so this path never moves across upgrades. Link it once:
 
     #+begin_src sh
     mkdir -p ~/Applications
-    ln -sfn "$(dirname "$(mise where aqua:#{repo})")/latest/misemacs/Emacs.app" ~/Applications/Emacs.app
+    ln -sfn "$(dirname "$(mise where packslip:github.com/#{repo})")/latest/Emacs.app" ~/Applications/Emacs.app
     #+end_src
 
     Then =open ~/Applications/Emacs.app= / =open -a Emacs= work like any installed app,
-    surviving every =mise up=. (Early releases predate the stable dir; their only
-    top-level entry is the tag-named =misemacs-<tag>-macos-arm64= directory.)
+    surviving every =mise up=.
 
     * What's in each release
 
@@ -119,19 +103,25 @@ defmodule Mix.Tasks.Release.ArtifactReadme do
     | =misemacs-<tag>-macos-arm64.tar.gz= | the relocatable =Emacs.app= (with bundled enchant for spell-checking) |
     | =SHASUMS256.txt= | sha256 of the tarball, for manual verification |
     | =build-manifest.json= | records the upstream emacs commit + the build-input fingerprint for that release |
+    | =packslip.sigstore.json= | signed artifact metadata, executable paths, and digests |
 
     * Verification
 
-    mise verifies GitHub's per-asset digest automatically on both the aqua and =github:=
-    install paths. To check by hand: download the tarball + =SHASUMS256.txt= and run
-    =shasum -c SHASUMS256.txt=.
+    mise verifies the signed Packslip and the downloaded archive automatically.
+    For a manual check, download =packslip.sigstore.json= and the tarball, then run:
+
+    #+begin_src sh
+    packslip verify packslip.sigstore.json \\
+      --identity-prefix https://github.com/#{repo}/ \\
+      --issuer https://token.actions.githubusercontent.com \\
+      --artifact misemacs-<tag>-macos-arm64.tar.gz
+    #+end_src
 
     * Versioning
 
-    Tags are CalVer: =emacs-#{channel}-YYYY-MM-DD= (a =.N= suffix is added on same-day
-    rebuilds). =@latest= rolls *this channel* independently and is marker-independent — the
-    registry uses =version_source: github_tag=, so the newest tag wins, not GitHub's "Latest"
-    badge.
+    New tags are SemVer-compatible CalVer: =vYYYY.M.N=, where =N= starts at 0
+    each month and increments for every release, including same-day rebuilds.
+    Each channel has its own repo, so =@latest= rolls that channel independently.
 
     * Source & issues
 

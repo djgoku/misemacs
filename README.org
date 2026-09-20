@@ -1,7 +1,7 @@
 #+TITLE: misemacs
 #+OPTIONS: toc:nil num:nil
 
-Reproducible, self-contained [[https://www.gnu.org/software/emacs/][GNU Emacs]] builds for Apple-Silicon macOS — compiled hermetically from a conda-forge toolchain, packaged as a relocatable =Emacs.app=, and installable with [[https://mise.jdx.dev/][mise]] + [[https://aquaproj.github.io/][aqua]].
+Reproducible, self-contained [[https://www.gnu.org/software/emacs/][GNU Emacs]] builds for Apple-Silicon macOS — compiled hermetically from a conda-forge toolchain, packaged as a relocatable =Emacs.app=, and installable with [[https://mise.jdx.dev/][mise]] + [[https://packslip.dev/][Packslip]].
 
 misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/emacs=]] on a daily cadence that *only publishes when upstream actually changed*. Adding a new Emacs version is a *data change, never a code change*.
 
@@ -10,7 +10,7 @@ misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/
 - *Self-contained =Emacs.app=* — the whole dylib closure (GnuTLS, libxml2, tree-sitter, …) is bundled under =Contents/Frameworks= and its load paths rewritten to resolve from inside the app. No Homebrew, no pixi, no system libraries needed at runtime; it runs on a clean machine.
 - *Reproducible* — every C dependency is pinned by a committed =pixi.lock= (the full transitive closure from conda-forge); the pipeline toolchain is pinned by =mise.lock=.
 - *GUI (Cocoa/NS) build* with tree-sitter, libxml2, and GnuTLS. JSON is native (no jansson). native-comp is off in v1.
-- *CalVer releases* tagged =emacs-<channel>-YYYY-MM-DD= (e.g. =emacs-master-2026-06-14=, =emacs-30-2026-06-14=), each shipping a =SHASUMS256.txt= and ad-hoc code signatures.
+- *Signed CalVer releases* tagged =vYYYY.M.N= in each channel repo (=N= starts at 0 each month and increments for every release), each shipping a signed =packslip.sigstore.json=, =SHASUMS256.txt=, and ad-hoc code signatures.
 - *Bundled spell-checking* — [[https://github.com/AbiWord/enchant][enchant]] (with the AppleSpell + Hunspell providers) ships *inside* the app, relocated to resolve from within the bundle, so [[https://github.com/minad/jinx][jinx]] compiles and runs on a clean machine with no Homebrew/system enchant. See *Spell-checking* below.
 - On your =PATH= after install: =Emacs=, =emacsclient=, =etags=, =ebrowse=, =emacs-app= (launches the GUI app via =open=, forwarding args), plus =enchant-2= and =enchant-lsmod-2= (the bundled spell-checker CLIs).
 
@@ -18,16 +18,14 @@ misemacs builds Emacs from [[https://github.com/emacsmirror/emacs][=emacsmirror/
 
 * Install
 
-misemacs ships its own single-file aqua registry ([[registry.yaml][=registry.yaml=]], at the repo root) with *one package per channel* — =djgoku/misemacs-emacs-master=, =djgoku/misemacs-emacs-31=, and =djgoku/misemacs-emacs-30=. Point mise at this repo, then install the channel you want:
+Each channel has a GitHub artifact repo that publishes a signed Packslip with every new release. Use a mise version with the Packslip backend, then install the channel you want:
 
 #+begin_src sh
-export MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs
+# the most recent master build (swap in -emacs-30 or -emacs-31 for a release branch):
+mise use packslip:github.com/djgoku/misemacs-emacs-master@latest
 
-# the most recent master build (swap in -emacs-31 or -emacs-30 for a release branch):
-mise use aqua:djgoku/misemacs-emacs-master@latest
-
-# …or pin a specific dated build (the version is the date; the channel is the package):
-mise use aqua:djgoku/misemacs-emacs-master@2026-06-14
+# …or pin a specific signed release (replace the example version with one published):
+mise use packslip:github.com/djgoku/misemacs-emacs-master@YYYY.M.N
 #+end_src
 
 =Emacs= and friends are then on your mise =PATH=:
@@ -36,7 +34,11 @@ mise use aqua:djgoku/misemacs-emacs-master@2026-06-14
 mise exec -- Emacs --version
 #+end_src
 
-mise verifies the downloaded asset against GitHub's release digest. (The first release appears once the daily workflow has run — see *How it works* below.)
+mise verifies the Packslip signer and archive digest. Older releases without a Packslip bundle are not installable through this backend. New releases can be installed by exact version as soon as signing finishes; mise's default 24-hour minimum release age can delay =@latest=.
+
+** Legacy Aqua installs
+
+Existing =emacs-<channel>-YYYY-MM-DD= tags and their assets remain available through the frozen [[registry.yaml][Aqua registry]]. Existing =aqua:= configurations can still reinstall those releases with =MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs=. The registry's version prefixes exclude new =vYYYY.M.N= tags, so =@latest= for =aqua:= remains on the last legacy release. Switch to =packslip:= as shown above to receive new releases. Existing local installations are not modified.
 
 ** Open it like an app (=open Emacs.app=)
 
@@ -48,35 +50,31 @@ emacs-app --init-directory ~/my-emacs-config --debug-init
 
 With args it forces a fresh instance (=open -n=) so they're never silently swallowed by an already-running instance; with no args it focuses/starts the app, like clicking it in Finder.
 
-For Finder, the Dock, and =open -a Emacs= integration: the tarball's top-level dir is the *stable* =misemacs/=, and mise maintains a =latest= symlink per tool — so =…/latest/misemacs/Emacs.app= never moves across upgrades. Link it into =~/Applications= once:
+For Finder, the Dock, and =open -a Emacs= integration: Packslip strips the tarball's top-level =misemacs/= directory when installing, and mise maintains a =latest= symlink per tool — so =…/latest/Emacs.app= never moves across upgrades. Link it into =~/Applications= once:
 
 #+begin_src sh
 mkdir -p ~/Applications
-ln -sfn "$(dirname "$(mise where aqua:djgoku/misemacs-emacs-master)")/latest/misemacs/Emacs.app" ~/Applications/Emacs.app
+ln -sfn "$(dirname "$(mise where packslip:github.com/djgoku/misemacs-emacs-master)")/latest/Emacs.app" ~/Applications/Emacs.app
 #+end_src
 
 Then =open ~/Applications/Emacs.app= (or =open -a Emacs=, Finder, the Dock) launches it like any installed app, and the link survives every =mise up=. Notes:
 
-- The =latest= symlink exists for =@latest= pins (the default above). With a dated pin, link =$(mise where …)/misemacs/Emacs.app= directly and re-link when you bump.
+- The =latest= symlink exists for =@latest= pins (the default above). With a dated pin, link =$(mise where …)/Emacs.app= directly and re-link when you bump.
 - Spotlight doesn't index symlinked apps — if you want Spotlight to find it, copy instead of link (the app is fully self-contained, so a copy works unchanged).
 
 ** Per-channel artifact repos
 
 Each channel publishes its releases to its *own* GitHub repo:
 
-| aqua package                      | artifact repo                       |
-|-----------------------------------+-------------------------------------|
-| =aqua:djgoku/misemacs-emacs-master= | [[https://github.com/djgoku/misemacs-emacs-master][=djgoku/misemacs-emacs-master=]]      |
-| =aqua:djgoku/misemacs-emacs-30=     | [[https://github.com/djgoku/misemacs-emacs-30][=djgoku/misemacs-emacs-30=]]          |
-| =aqua:djgoku/misemacs-emacs-31=     | [[https://github.com/djgoku/misemacs-emacs-31][=djgoku/misemacs-emacs-31=]]          |
+| Packslip tool | artifact repo |
+|---------------+---------------|
+| =packslip:github.com/djgoku/misemacs-emacs-master= | [[https://github.com/djgoku/misemacs-emacs-master][=djgoku/misemacs-emacs-master=]] |
+| =packslip:github.com/djgoku/misemacs-emacs-30= | [[https://github.com/djgoku/misemacs-emacs-30][=djgoku/misemacs-emacs-30=]] |
+| =packslip:github.com/djgoku/misemacs-emacs-31= | [[https://github.com/djgoku/misemacs-emacs-31][=djgoku/misemacs-emacs-31=]] |
 
-The aqua *package names* are unchanged; only the underlying repo each package reads from has changed. The registry itself ([[registry.yaml][=registry.yaml=]]) still lives here in =djgoku/misemacs=, and =MISE_AQUA_REGISTRIES= continues to point at it.
+Each artifact repo signs its own releases using its GitHub Actions identity. This lets mise pin and verify the correct channel repo. =@latest= follows that repo's GitHub Latest marker when eligible; the pipeline moves the marker after signing completes. Without a usable marker, Packslip selects the highest eligible SemVer.
 
-*Why separate repos?* mise (via aqua) fetches only the first ~100 entries of a repo's tag/release list. If both channels shared a single repo, a high-frequency channel (e.g. =master=, built daily) would eventually push a low-frequency channel's tags off that page, making older — or even all — versions of that channel uninstallable. One repo per channel eliminates the interference.
-
-*=@latest= is marker-independent.* The registry uses =version_source: github_tag=, so =@latest= and =mise up= always resolve to the newest *tag* in the channel's own repo — independent of which release GitHub marks as "Latest". A =@latest= pin rolls automatically with =mise up=; no =--bump= is needed. =--bump= is only required when moving from one exact dated pin to another.
-
-*Fresh-channel caveat.* A newly-added channel has no installable version until its first daily build publishes — its artifact repo has no releases yet.
+*Fresh-channel caveat.* A newly-added channel has no installable version until its first daily build publishes and its Packslip signing workflow completes.
 
 * Spell-checking (bundled enchant)
 
@@ -118,9 +116,9 @@ A small *Elixir orchestrator* makes every decision (pure, unit-tested functions)
 #+begin_example
   decide ─▶ build ─▶ finalize
     │         │         │
-    │         │         └─ merge manifest fragments, flip "Latest"
+    │         │         └─ wait for Packslip, merge fragments, flip "Latest"
     │         └─ matrix: one cell per (changed version × target):
-    │              build → relocate → package → publish
+    │              build → relocate → package → publish → artifact-repo signing
     └─ change gate: nothing changed ⇒ publish nothing
 #+end_example
 
@@ -130,8 +128,8 @@ A small *Elixir orchestrator* makes every decision (pure, unit-tested functions)
 | =build=    | bash + pixi    | =./configure= + =make= a GUI Emacs against the locked per-version pixi env               |
 | =relocate= | Elixir         | Bundle the dylib closure, rewrite load paths, ad-hoc sign; gated by an =otool= check     |
 | =package=  | bash           | xattr-free tarball + =SHASUMS256.txt= + self-verify                                      |
-| =publish=  | bash           | Create the GitHub release (asset + checksums)                                           |
-| =finalize= | Elixir + bash  | Merge per-cell manifest fragments, attach =build-manifest.json=, flip the "Latest" marker |
+| =publish=  | bash           | Create the GitHub release (asset + checksums); its artifact repo signs the Packslip   |
+| =finalize= | Elixir + bash  | Wait for signed Packslips, merge fragments, attach =build-manifest.json=, flip "Latest" |
 
 The daily workflow ([[.github/workflows/daily.yml][=.github/workflows/daily.yml=]]) runs on a cron, on =workflow_dispatch= (with an optional =force_version=), and on pull requests touching =versions/= or =*.toml= (as a no-publish dry-run).
 
@@ -150,8 +148,8 @@ misemacs/
 │   └── emacs-31/
 ├── orchestrator/          # Elixir brain: pure decision fns + Mix tasks (ExUnit-tested)
 ├── pipeline/              # bash stages: build-emacs, package, publish, promote
-├── scripts/               # configure-check, e2e-aqua-install
-├── registry.yaml          # the vendored aqua registry users consume (root ⇒ short registry URL)
+├── scripts/               # configure-check, e2e-packslip-install
+├── templates/             # Packslip release workflow installed in each artifact repo
 ├── mise.toml              # shared task seam (test/lint/build/decide/finalize/…)
 └── .github/workflows/     # daily.yml (the automation) + orchestrator-ci.yml
 #+end_example
@@ -162,25 +160,32 @@ A "build" is a *version*: one row in =versions.toml= plus a =versions/<name>/= d
 
 =emacs-30= is a worked example. The full steps are:
 
-1. Add a row to [[versions.toml][=versions.toml=]] (=ref = "emacs-30"=, =channel = "30"= → tag =emacs-30-YYYY-MM-DD=).
+1. Add a row to [[versions.toml][=versions.toml=]] (=ref = "emacs-30"=, =channel = "30"= → its own artifact repo).
 2. Add a [[versions/emacs-30/][=versions/emacs-30/=]] directory copied from an existing channel with =EMACS_REF= flipped to =emacs-30=, then resolve and commit its =pixi.lock=. Emacs 30 specifically requires =libtree-sitter >=0.25,<0.26=: it calls =ts_language_version=, which Tree-sitter 0.26 removed.
-3. Add a package entry to [[registry.yaml][=registry.yaml=]] pointing at =repo_name: misemacs-emacs-<channel>= (copy an existing entry and adjust =name=, =repo_name=, =description=, and =version_prefix=).
-4. Create the artifact repo and seed it with its generated README (one-time — the README is the required initial commit; without it GitHub returns =HTTP 422 "Repository is empty"= on the first release):
+3. Create the artifact repo and seed it with its generated README (one-time — the README is the required initial commit; without it GitHub returns =HTTP 422 "Repository is empty"= on the first release):
    #+begin_src sh
    gh repo create djgoku/misemacs-emacs-<channel> --public
    mise run artifact-readme -- --version <name> > /tmp/r.org
    gh api repos/djgoku/misemacs-emacs-<channel>/contents/README.org -X PUT \
      -f message="init: artifact repo" -f content="$(base64 -i /tmp/r.org)"
    #+end_src
-5. Install the publishing GitHub App on the new artifact repo so the daily workflow can push releases to it.
+4. Install [[templates/artifact-packslip.yml][the Packslip workflow template]] as =.github/workflows/packslip.yml= on the artifact repo's default branch. This requires a token allowed to write workflow files. For an artifact repo with no workflow at that path:
+   #+begin_src sh
+   repo=djgoku/misemacs-emacs-master  # repeat with misemacs-emacs-30 and misemacs-emacs-31
+   gh api "repos/$repo/contents/.github/workflows/packslip.yml" -X PUT \
+     -f message='ci: sign releases with Packslip' \
+     -f content="$(base64 -i templates/artifact-packslip.yml | tr -d '\n')"
+   #+end_src
+   Do this for the master, 30, and 31 artifact repos before deploying this migration, and regenerate their READMEs with =mise run artifact-readme=. The publisher checks that the installed workflow matches the template before creating a release.
+5. Install the publishing GitHub App on the artifact repo so the daily workflow can create releases and trigger its signing workflow.
 
-After step 5, the daily pipeline detects the new version, builds it, and publishes the first release to =djgoku/misemacs-emacs-<channel>= — at which point =mise use aqua:djgoku/misemacs-emacs-<channel>@latest= becomes installable.
+After step 5, the daily pipeline detects the new version, builds it, and publishes the first signed release to =djgoku/misemacs-emacs-<channel>=. Its exact version is then installable; mise's default release age can delay =@latest=.
 
 The layout contract is enforced by the =version_layout_test= (every =versions.toml= row must have its three input files committed), so a malformed addition fails loudly.
 
 * Development
 
-misemacs uses [[https://mise.jdx.dev/][mise]] as the one task runner across local dev, the pregate hooks, and CI:
+misemacs uses [[https://mise.jdx.dev/][mise]] as the task runner across local development and CI:
 
 #+begin_src sh
 mise run test     # orchestrator ExUnit suite (mix test --warnings-as-errors)
@@ -190,7 +195,7 @@ mise run fmt      # mix format
 
 Heavier build-related tasks (run =mise tasks= for the full list): =build=, =relocate=, =package=, =publish=, =configure-check=, =cleanroom=, =decide=, =finalize=.
 
-Before pushing, the =.pregate/= hooks run the test/lint suite on Linux and a no-pixi cleanroom launch inside a disposable macOS VM. Design specs, per-phase plans, and the validation log live under [[docs/superpowers/][=docs/superpowers/=]].
+Run =mise run test= and =mise run lint= before pushing. After building, staging enchant, and relocating the app, =mise run cleanroom= checks a launch with the pixi environment moved aside. =mise run e2e -- <owner/repo> <tag>= checks a published Packslip release on a local Mac with fresh mise data and cache directories. Design specs, per-phase plans, and the validation log live under [[docs/superpowers/][=docs/superpowers/=]].
 
 * Status
 

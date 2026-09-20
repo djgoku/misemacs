@@ -57,7 +57,7 @@ defmodule Orchestrator.Orchestrate do
     tags =
       for f <- mine, {_v, e} <- Map.get(f, "versions", %{}), do: e["released_tag"]
 
-    tags = tags |> Enum.reject(&is_nil/1) |> Enum.sort()
+    tags = tags |> Enum.reject(&is_nil/1) |> Latest.sort_tags()
 
     latest =
       case Latest.latest_target(tags) do

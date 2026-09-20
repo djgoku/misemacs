@@ -2,30 +2,28 @@ defmodule Orchestrator.NamingTest do
   use ExUnit.Case, async: true
   alias Orchestrator.Naming
 
-  @tag_str "emacs-master-2026-06-05"
+  @tag_str "v2026.6.0"
 
-  test "tag_base builds emacs-<channel>-<date>" do
-    assert Naming.tag_base("master", "2026-06-05") == "emacs-master-2026-06-05"
+  test "tag_base builds a Packslip-discoverable CalVer" do
+    assert Naming.tag_base("master", "2026-06-05") == "v2026.6.0"
   end
 
-  test "asset_name matches the aqua template misemacs-<version>-<os>-<arch>.tar.gz" do
+  test "asset_name uses the release tag and target platform" do
     assert Naming.asset_name(@tag_str, "macos", "arm64") ==
-             "misemacs-emacs-master-2026-06-05-macos-arm64.tar.gz"
+             "misemacs-v2026.6.0-macos-arm64.tar.gz"
   end
 
-  test "asset_name satisfies the aqua template shape" do
+  test "asset_name satisfies the archive filename shape" do
     name = Naming.asset_name(@tag_str, "macos", "arm64")
     assert Regex.match?(~r/^misemacs-.+-macos-arm64\.tar\.gz$/, name)
   end
 
-  test "arch token passes through verbatim (the registry has NO arch replacement)" do
-    # Validated Phase 4 (P7): aqua's {{.Arch}} on darwin/arm64 IS "arm64" (real install).
-    # This stays as the canary in case aqua ever changes its normalization.
+  test "arch token passes through verbatim" do
     assert Naming.asset_name(@tag_str, "macos", "arm64") =~ "-arm64.tar.gz"
     assert Naming.asset_name(@tag_str, "macos", "aarch64") =~ "-aarch64.tar.gz"
   end
 
-  test "asset_stem is the asset name without .tar.gz (aqua's {{.AssetWithoutExt}})" do
+  test "asset_stem is the asset name without .tar.gz" do
     name = Naming.asset_name(@tag_str, "macos", "arm64")
     stem = Naming.asset_stem(@tag_str, "macos", "arm64")
     assert name == stem <> ".tar.gz"
@@ -33,8 +31,7 @@ defmodule Orchestrator.NamingTest do
 
   test "inner_dir is the stable tarball top dir, never colliding with a stem" do
     assert Naming.inner_dir() == "misemacs"
-    # Stems are "misemacs-<tag>-…", so the tag-named compat symlink (named asset_stem)
-    # can coexist with the stable dir in one tarball — pipeline/package relies on this.
+    # Asset names retain the channel and version while the archive root stays stable.
     stem = Naming.asset_stem(@tag_str, "macos", "arm64")
     assert String.starts_with?(stem, Naming.inner_dir() <> "-")
     refute stem == Naming.inner_dir()
@@ -44,13 +41,13 @@ defmodule Orchestrator.NamingTest do
     assert Naming.checksums_filename() == "SHASUMS256.txt"
   end
 
-  test "bundle binaries match the registry's expected extract paths" do
+  test "bundle binaries match Packslip's expected extract paths" do
     bins = Naming.bundle_binaries()
-    assert "Emacs.app/Contents/MacOS/Emacs" in bins
+    assert "Emacs.app/Contents/MacOS/bin/emacs-cli" in bins
     assert "Emacs.app/Contents/MacOS/bin/emacsclient" in bins
     assert "Emacs.app/Contents/MacOS/bin/etags" in bins
     assert "Emacs.app/Contents/MacOS/bin/ebrowse" in bins
-    # the open(1) launcher rides the same files: mechanism (build-emacs [3.5])
+    # The open(1) launcher is embedded by build-emacs [3.5].
     assert "Emacs.app/Contents/MacOS/bin/emacs-app" in bins
   end
 

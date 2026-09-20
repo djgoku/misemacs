@@ -1,0 +1,16 @@
+#!/bin/sh
+# Run the bundled Emacs by its real app path, even when mise invokes this
+# launcher through a bin symlink. Emacs uses its invocation path to find Lisp.
+set -eu
+
+self=$0
+while [ -L "$self" ]; do
+  dir="$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)"
+  target="$(readlink "$self")"
+  case "$target" in
+    /*) self=$target ;;
+    *) self=$dir/$target ;;
+  esac
+done
+app="$(CDPATH= cd -- "$(dirname -- "$self")/../../.." && pwd)"
+exec "$app/Contents/MacOS/Emacs" "$@"
