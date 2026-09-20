@@ -15,8 +15,13 @@ defmodule Orchestrator.Core.LatestTest do
     assert Latest.latest_target(tags) == {:set, "emacs-31-2026-06-29"}
   end
 
-  test "a same-day .N collision suffix sorts newest" do
+  test "a legacy same-day .N collision suffix sorts newest" do
     tags = ["emacs-31-2026-06-29", "emacs-31-2026-06-29.1"]
     assert Latest.latest_target(tags) == {:set, "emacs-31-2026-06-29.1"}
+  end
+
+  test "packslip versions use numeric semver order across months and rebuilds" do
+    tags = ["v2026.9.11", "v2026.10.0", "v2026.9.9"]
+    assert Latest.latest_target(tags) == {:set, "v2026.10.0"}
   end
 end

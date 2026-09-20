@@ -1,8 +1,7 @@
 defmodule Orchestrator.Releases.Gh do
   @moduledoc """
   Default `Orchestrator.Releases` — fetch `build-manifest.json` from the per-channel release
-  repo via `gh`, scanning tags newest-first (lexical-desc, matches aqua's `github_tag`
-  resolution). Three-way result:
+  repo via `gh`, scanning tags newest-first by Packslip version. Three-way result:
 
     * `{:ok, manifest}`   — a recent tag carries a valid manifest (first hit of the scan)
     * `:empty`            — repo reachable but no tags, or none of the newest `@scan_back`
@@ -14,6 +13,7 @@ defmodule Orchestrator.Releases.Gh do
   would deadlock the run that published it (see `classify/2` and design §4.7).
   """
   @behaviour Orchestrator.Releases
+  alias Orchestrator.Core.Latest
   @asset "build-manifest.json"
 
   @impl true
@@ -28,7 +28,7 @@ defmodule Orchestrator.Releases.Gh do
 
   @doc """
   Pure decision over a `list_tags` result + a `fetch.(tag)` fun. Scans the newest tags first
-  (lexical-desc) and returns the FIRST one that carries a `build-manifest.json` — tolerating
+  (version-desc) and returns the FIRST one that carries a `build-manifest.json` — tolerating
   manifest-less releases (a release is published BEFORE finalize attaches its manifest, so the
   lexical-newest tag during/after a run may legitimately have none yet):
     * `{:error, reason}`        -> `{:error, reason}` (the LIST fetch failed = repo unreachable/auth)
@@ -44,8 +44,8 @@ defmodule Orchestrator.Releases.Gh do
 
   def classify({:ok, tags}, fetch) do
     tags
-    # Lexical-desc == aqua's github_tag order (incl. the `.10 < .9` quirk — see Core.Latest).
-    |> Enum.sort(:desc)
+    |> Latest.sort_tags()
+    |> Enum.reverse()
     |> Enum.take(@scan_back)
     |> Enum.find_value(fn tag -> fetch.(tag) end)
     |> case do
@@ -56,7 +56,7 @@ defmodule Orchestrator.Releases.Gh do
 
   # IO: list the repo's git tags (newest page). {:ok, [name]} on success (possibly empty),
   # {:error, _} on gh failure. The GitHub tags API returns the newest 100; the per-channel
-  # repo's global-newest is therefore present and `classify` takes the lexical max.
+  # repo's global-newest is therefore present and `classify` sorts the fetched page.
   defp list_tags(repo) do
     case gh(["api", "repos/#{repo}/tags?per_page=100", "--jq", ".[].name"]) do
       {out, 0} -> {:ok, out |> String.split("\n", trim: true) |> Enum.map(&String.trim/1)}

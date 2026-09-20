@@ -1,31 +1,31 @@
 #!/usr/bin/env bash
-# scripts/e2e-aqua-install.sh <owner/repo> <tag> <registry-url>          (host mode)
-# scripts/e2e-aqua-install.sh --in-vm <owner/repo> <tag> <registry-url>  (inside the VM)
+# scripts/e2e-packslip-install.sh <owner/repo> <tag>          (host mode)
+# scripts/e2e-packslip-install.sh --in-vm <owner/repo> <tag>  (inside the VM)
 # The §14 DoD check: a credential-free clean box installs the release exactly like a
-# user (MISE_AQUA_REGISTRY_URL + mise use aqua:<repo>@<tag>) and the app runs; then the
+# user (mise use packslip:github.com/<repo>@<version>) and the app runs; then the
 # E7-correct integrity checks (per-Mach-O sentinels, zero quarantine — E1 invariant).
 set -euo pipefail
 
 if [ "${1:-}" != "--in-vm" ]; then
-  REPO="${1:?usage: e2e-aqua-install.sh <owner/repo> <tag> <registry-url>}"
+  REPO="${1:?usage: e2e-packslip-install.sh <owner/repo> <tag>}"
   TAG="${2:?missing tag}"
-  URL="${3:?missing registry url}"
-  exec pregate --macos --verbose --cmd "bash scripts/e2e-aqua-install.sh --in-vm '$REPO' '$TAG' '$URL'"
+  exec pregate --macos --verbose --cmd "bash scripts/e2e-packslip-install.sh --in-vm '$REPO' '$TAG'"
 fi
 
 shift
-REPO="${1:?}"; TAG="${2:?}"; URL="${3:?}"
-export MISE_AQUA_REGISTRY_URL="$URL"
+REPO="${1:?}"; TAG="${2:?}"
+[[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FATAL: expected a Packslip SemVer tag, got $TAG"; exit 1; }
+TOOL="packslip:github.com/$REPO@${TAG#v}"
 export MISE_DATA_DIR; MISE_DATA_DIR="$(mktemp -d)"
 export MISE_CACHE_DIR; MISE_CACHE_DIR="$(mktemp -d)"   # separate from DATA — both must be fresh (P8 gotcha)
 export MISE_GLOBAL_CONFIG_FILE; MISE_GLOBAL_CONFIG_FILE="$(mktemp)"
 export MISE_YES=1
 cd "$(mktemp -d)"
 
-echo ">> [1] mise use aqua:$REPO@$TAG   (registry: $URL)"
-mise use "aqua:$REPO@$TAG"
+echo ">> [1] mise use $TOOL"
+mise use "$TOOL"
 
-echo ">> [2] --batch launch through mise (PATH from the registry files: entries)"
+echo ">> [2] --batch launch through mise (PATH from the signed Packslip bin entries)"
 mise exec -- Emacs --batch --eval '(princ (format "E2E-BATCH-OK %s\n" emacs-version))'
 
 echo ">> [3] GUI frame smoke (best-effort; VM session has a display per Phase 3)"
@@ -35,22 +35,18 @@ else
   echo "E2E-GUI-SKIPPED (no display) — batch is the hard gate"
 fi
 
-INSTALL="$(mise where "aqua:$REPO@$TAG")"
+INSTALL="$(mise where "$TOOL")"
 echo ">> [4] per-Mach-O sentinel signatures (E7: bundle-level verify is build-time-only)"
-# misemacs-* globs the tag-named COMPAT SYMLINK (stable dir is bare misemacs/, unmatched
-# by the -*) — so these two lines also prove the registry's {{.AssetWithoutExt}} path.
-codesign --verify --strict "$INSTALL"/misemacs-*/Emacs.app/Contents/Frameworks/libgnutls.30.dylib
-codesign --verify --strict "$INSTALL"/misemacs-*/Emacs.app/Contents/MacOS/bin/emacsclient
+codesign --verify --strict "$INSTALL/misemacs/Emacs.app/Contents/Frameworks/libgnutls.30.dylib"
+codesign --verify --strict "$INSTALL/misemacs/Emacs.app/Contents/MacOS/bin/emacsclient"
 echo "E2E-EMBEDDED-SIGS-OK"
 
 echo ">> [4b] stable inner dir (open/~/Applications contract: latest/misemacs/Emacs.app)"
 [ -d "$INSTALL/misemacs/Emacs.app" ] || { echo "FATAL: stable dir misemacs/Emacs.app missing"; exit 1; }
-link="$(readlink "$INSTALL"/misemacs-*)" || true
-[ "$link" = "misemacs" ] || { echo "FATAL: compat symlink is not a symlink -> misemacs (got: '$link')"; exit 1; }
 [ -x "$INSTALL/misemacs/Emacs.app/Contents/MacOS/bin/emacs-app" ] || { echo "FATAL: emacs-app launcher missing/non-executable"; exit 1; }
 echo "E2E-STABLE-DIR-OK"
 
-echo ">> [5] quarantine-free install (E1 invariant via aqua's Go extraction)"
+echo ">> [5] quarantine-free install"
 qcount="$(find "$INSTALL" -exec xattr -l {} + 2>/dev/null | grep -c com.apple.quarantine || true)"
 [ "$qcount" = "0" ] || { echo "FATAL: $qcount quarantine xattrs in the install tree"; exit 1; }
 echo "E2E-NO-QUARANTINE"

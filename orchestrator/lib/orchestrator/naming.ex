@@ -2,18 +2,8 @@ defmodule Orchestrator.Naming do
   @moduledoc """
   SOLE owner of release tag / asset / checksum name strings.
 
-  These MUST match the consumed aqua registry template — the vendored
-  `registry.yaml` at this repo's root, bound here by `registry_contract_test.exs`
-  (Phase 4, P7/G5; the `djgoku/aqua-registry@feat/...` branch is a PR-shaped copy,
-  not the file `MISE_AQUA_REGISTRIES` serves):
-
-      misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz   (darwin -> macos, format tar.gz)
-
-  where {{.Version}} is the git tag. Any drift here silently breaks `mise use aqua:...`.
-
-  ARCH NOTE: the registry has NO arch replacement, so the `arch` passed in MUST equal the
-  token aqua renders for the platform ({{.Arch}}). VALIDATED (Phase 4, P7): a real
-  `mise install` resolved `…-macos-arm64.tar.gz` on darwin/arm64 — aqua renders `arm64`.
+  The release tag is a Packslip-discoverable SemVer CalVer. The archive keeps its
+  existing macos-arm64 filename and stable `misemacs/` top-level directory.
   """
 
   @asset_prefix "misemacs"
@@ -51,9 +41,19 @@ defmodule Orchestrator.Naming do
   def upstream(override \\ nil),
     do: override || System.get_env("EMACS_UPSTREAM") || @default_upstream
 
-  @doc "Base release tag for a channel/date: `emacs-<channel>-<date>` (no `.N` suffix)."
+  @doc "First release tag for a month. Repos isolate channels; the counter starts at zero."
   @spec tag_base(String.t(), String.t()) :: String.t()
-  def tag_base(channel, date), do: "emacs-#{channel}-#{date}"
+  def tag_base(_channel, date) do
+    {:ok, parsed} = Date.from_iso8601(date)
+    "v#{parsed.year}.#{parsed.month}.0"
+  end
+
+  @doc "Packslip's SemVer version for a release tag."
+  @spec packslip_version(String.t()) :: String.t()
+  def packslip_version("v" <> version) do
+    {:ok, _} = Version.parse(version)
+    version
+  end
 
   @doc """
   Artifact repo for a channel: `<base>-emacs-<channel>` (e.g.
@@ -68,9 +68,8 @@ defmodule Orchestrator.Naming do
   def asset_name(tag, os, arch), do: "#{asset_stem(tag, os, arch)}.#{@format}"
 
   @doc """
-  Asset name without the .tar.gz extension == aqua's `{{.AssetWithoutExt}}`. No longer the
-  tarball's real top-level dir (that's `inner_dir/0`) — the tarball ships a symlink with
-  this name so the registry's `{{.AssetWithoutExt}}/...` srcs resolve on every release era.
+  Asset name without the .tar.gz extension. The archive's real top-level dir is
+  `inner_dir/0`.
   """
   @spec asset_stem(String.t(), String.t(), String.t()) :: String.t()
   def asset_stem(tag, os, arch), do: "#{@asset_prefix}-#{tag}-#{os}-#{arch}"
@@ -80,12 +79,7 @@ defmodule Orchestrator.Naming do
   `installs/<tool>/latest/#{@inner_dir}/Emacs.app` never moves and a one-time
   `ln -sfn` into ~/Applications survives `mise up` (README "Open it like an app").
 
-  The tarball also carries a compat symlink `asset_stem(...)` -> this dir. That symlink is
-  load-bearing: mise's aqua backend IGNORES version_constraint/version_overrides (probed
-  against mise 2026.8.3, 2026-08-08 — the top-level package branch always wins), so
-  registry.yaml cannot branch `src:` templates by version; `{{.AssetWithoutExt}}`
-  srcs + this symlink are what keep old (real tag-named dir) and new (stable dir)
-  releases installable from ONE registry. Releases before 2026-08-09 have no symlink.
+  Packslip declares executable paths under this directory directly.
   """
   @spec inner_dir() :: String.t()
   def inner_dir, do: @inner_dir
@@ -94,7 +88,7 @@ defmodule Orchestrator.Naming do
   @spec checksums_filename() :: String.t()
   def checksums_filename, do: @checksums
 
-  @doc "Paths (relative to the stem dir) that aqua extracts onto PATH."
+  @doc "Executable paths relative to the stable archive root, declared in Packslip."
   @spec bundle_binaries() :: [String.t()]
   def bundle_binaries do
     [

@@ -1,11 +1,8 @@
 defmodule Orchestrator.Core.Tag do
   @moduledoc """
-  Pure tag computation. No IO.
-
-  Base format is owned by `Orchestrator.Naming.tag_base/2`; this module only adds the
-  `.N` collision suffix. Same-day collisions append `.1`, `.2`, ...; gaps are NOT filled
-  (next = highest present suffix + 1). A base is "in use" if the bare tag OR any
-  `<base>.N` exists.
+  Pure tag computation. No IO. Packslip discovers a release from its SemVer tag.
+  The patch is a monthly counter, starting at zero and incrementing for every
+  release in that channel's repository. It resets when the month changes.
 
   RETRY-ON-CONFLICT CONTRACT (Phase 5): `next_tag/3` is pure over a tag SNAPSHOT. The
   publisher MUST pass a freshly-fetched `existing_tags` on EACH publish attempt; on a
@@ -17,41 +14,24 @@ defmodule Orchestrator.Core.Tag do
   @spec next_tag(String.t(), String.t(), [String.t()]) :: String.t()
   def next_tag(channel, date, existing_tags) do
     base = Naming.tag_base(channel, date)
-    taken = MapSet.new(existing_tags)
 
-    if not MapSet.member?(taken, base) and not any_suffix?(taken, base) do
-      base
-    else
-      "#{base}.#{max_suffix(existing_tags, base) + 1}"
-    end
-  end
+    [year, month, _first_counter] =
+      base |> String.trim_leading("v") |> String.split(".") |> Enum.map(&String.to_integer/1)
 
-  defp any_suffix?(taken, base) do
-    prefix = base <> "."
-    Enum.any?(taken, &String.starts_with?(&1, prefix))
-  end
+    used =
+      existing_tags
+      |> Enum.flat_map(fn tag ->
+        case Regex.run(~r/^v(\d+)\.(\d+)\.(\d+)$/, tag, capture: :all_but_first) do
+          [y, m, p] ->
+            {y, m, p} = {String.to_integer(y), String.to_integer(m), String.to_integer(p)}
+            if y == year and m == month, do: [p], else: []
 
-  defp max_suffix(tags, base) do
-    prefix = base <> "."
-
-    tags
-    |> Enum.flat_map(fn
-      ^base -> [0]
-      tag -> suffix_of(tag, prefix)
-    end)
-    |> Enum.max(fn -> 0 end)
-  end
-
-  defp suffix_of(tag, prefix) do
-    case String.split(tag, prefix, parts: 2) do
-      ["", n] ->
-        case Integer.parse(n) do
-          {i, ""} -> [i]
-          _ -> []
+          _ ->
+            []
         end
+      end)
 
-      _ ->
-        []
-    end
+    next = if used == [], do: 0, else: Enum.max(used) + 1
+    "v#{year}.#{month}.#{next}"
   end
 end

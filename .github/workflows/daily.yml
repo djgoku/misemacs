@@ -209,5 +209,6 @@ jobs:
           BUILT_TAGS="$(printf '%s\n' "$FIN" | sed -n 's/^built_tags=//p')"
           if [ -z "$LATEST_TAG" ]; then echo "no fragments for ${{ matrix.repo }}"; exit 0; fi
           bash pipeline/promote --repo "${{ matrix.repo }}" --tag "$LATEST_TAG" \
+            --channel "${{ matrix.channel }}" \
             --manifest "$GITHUB_WORKSPACE/dist/build-manifest.json" \
             --attach "$BUILT_TAGS"

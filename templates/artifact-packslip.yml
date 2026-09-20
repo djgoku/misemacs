@@ -1,0 +1,31 @@
+# Install as .github/workflows/packslip.yml in each per-channel artifact repository.
+# The release is created with a GitHub App token so this event starts a workflow
+# in the artifact repository. Its OIDC identity then matches the Packslip project.
+name: sign-release
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  packslip:
+    if: startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jdx/packslip@v1.2.0
+        with:
+          tag: ${{ github.event.release.tag_name }}
+          download: 'misemacs-*.tar.gz'
+          # The archive was built in djgoku/misemacs. This job records and signs
+          # its digest; it does not claim to have built the archive.
+          attest: 'false'
+          bin: >-
+            emacs=misemacs/Emacs.app/Contents/MacOS/Emacs
+            Emacs=misemacs/Emacs.app/Contents/MacOS/Emacs
+            emacsclient=misemacs/Emacs.app/Contents/MacOS/bin/emacsclient
+            etags=misemacs/Emacs.app/Contents/MacOS/bin/etags
+            ebrowse=misemacs/Emacs.app/Contents/MacOS/bin/ebrowse
+            emacs-app=misemacs/Emacs.app/Contents/MacOS/bin/emacs-app
+            enchant-2=misemacs/Emacs.app/Contents/Resources/enchant/bin/enchant-2
+            enchant-lsmod-2=misemacs/Emacs.app/Contents/Resources/enchant/bin/enchant-lsmod-2

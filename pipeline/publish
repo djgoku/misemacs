@@ -27,6 +27,13 @@ EXPECTED_REPO="${MISEMACS_ARTIFACT_BASE:-djgoku/misemacs}-emacs-$CHANNEL"
 if [ "$REPO" != "$EXPECTED_REPO" ]; then
   echo "FATAL: --repo '$REPO' != expected artifact repo '$EXPECTED_REPO' for channel '$CHANNEL'"; exit 1
 fi
+# Packslip must be signed by this artifact repository's own workflow identity.
+# Fail before making a public release if the current workflow template is not installed.
+EXPECTED_WORKFLOW_SHA="$(git hash-object "$HERE/templates/artifact-packslip.yml")"
+ACTUAL_WORKFLOW_SHA="$(gh api "repos/$REPO/contents/.github/workflows/packslip.yml" --jq .sha)" \
+  || { echo "FATAL: install templates/artifact-packslip.yml as .github/workflows/packslip.yml in $REPO first"; exit 1; }
+[ "$ACTUAL_WORKFLOW_SHA" = "$EXPECTED_WORKFLOW_SHA" ] \
+  || { echo "FATAL: $REPO Packslip workflow differs from templates/artifact-packslip.yml"; exit 1; }
 DATE="$(date -u +%F)"
 
 snapshot() {  # union of git tags (complete; strips peeled ^{} dups) and release names (draft-held names, P4)

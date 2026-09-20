@@ -2,49 +2,46 @@ defmodule Mix.Tasks.Release.ArtifactReadmeTest do
   use ExUnit.Case, async: true
   import ExUnit.CaptureIO
 
-  @registry "MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs"
-
   defp gen(version),
     do:
       capture_io(fn ->
         Mix.Tasks.Release.ArtifactReadme.run(["--version", version, "--root", ".."])
       end)
 
-  test "master README: repo, channel, ref, and all three install methods" do
+  test "master README: repo, channel, ref, and Packslip install" do
     out = gen("master")
     assert out =~ "djgoku/misemacs-emacs-master"
     assert out =~ "=master= channel"
     assert out =~ "=master= ref"
-    assert out =~ "mise use aqua:djgoku/misemacs-emacs-master@latest"
-    assert out =~ @registry
-    assert out =~ "mise use github:djgoku/misemacs-emacs-master@latest"
+    assert out =~ "mise use packslip:github.com/djgoku/misemacs-emacs-master@latest"
+    refute out =~ "aqua:"
   end
 
-  test "emacs-31 README: channel \"31\", ref \"emacs-31\", repo, and all three install methods" do
+  test "emacs-31 README: channel, ref, repo, and Packslip install" do
     out = gen("emacs-31")
     assert out =~ "djgoku/misemacs-emacs-31"
     assert out =~ "=31= channel"
     assert out =~ "=emacs-31= ref"
-    assert out =~ "emacs-31-YYYY-MM-DD"
-    assert out =~ "mise use aqua:djgoku/misemacs-emacs-31@latest"
-    assert out =~ @registry
-    assert out =~ "mise use github:djgoku/misemacs-emacs-31@latest"
+    assert out =~ "vYYYY.M.N"
+    assert out =~ "mise use packslip:github.com/djgoku/misemacs-emacs-31@latest"
+    refute out =~ "aqua:"
   end
 
   test "README documents the stable-dir open/~/Applications flow (per-channel repo in the link)" do
     out = gen("master")
     assert out =~ "latest/misemacs/Emacs.app"
-    assert out =~ ~s[mise where aqua:djgoku/misemacs-emacs-master)")]
+    assert out =~ ~s[mise where packslip:github.com/djgoku/misemacs-emacs-master)")]
     assert out =~ "open ~/Applications/Emacs.app"
     assert out =~ "emacs-app --init-directory"
   end
 
-  test "README documents the 3 release assets + verification + source pointer" do
+  test "README documents release assets, signed manifest, and source pointer" do
     out = gen("master")
     assert out =~ "build-manifest.json"
     assert out =~ "SHASUMS256.txt"
+    assert out =~ "packslip.sigstore.json"
     assert out =~ "macos-arm64.tar.gz"
-    assert out =~ "shasum -c"
+    assert out =~ "packslip verify"
     assert out =~ "do not open issues or pull requests here"
   end
 

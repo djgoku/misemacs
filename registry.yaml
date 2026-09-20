@@ -1,16 +1,16 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/registry.json
+# Frozen legacy Aqua registry for the existing emacs-<channel>-YYYY-MM-DD tags.
+# New releases use signed Packslips and vYYYY.M.N tags, which the version_prefix
+# values below exclude. Aqua @latest stays on the final legacy release; switch
+# to packslip:github.com/djgoku/misemacs-emacs-<channel> for new releases.
 # This file lives at the repo ROOT so mise resolves the short registry URL
 # `MISE_AQUA_REGISTRIES=https://github.com/djgoku/misemacs` (a github.com
 # <owner>/<repo> URL is only ever probed for registry.yaml at the root).
 # Local test: MISE_AQUA_REGISTRIES=file://$PWD/registry.yaml mise ls-remote aqua:djgoku/misemacs-emacs-master
 #
-# One package per channel (Phase 5, hand-maintained). The version-prefix strips the
-# `emacs-<channel>-` tag prefix so each package's versions are bare CalVer dates
-# (e.g. 2026-06-14) that `mise use @latest` / `mise up` roll within that channel —
-# the literal word "master" otherwise breaks `@<channel>` resolution. {{.Version}} in
-# `asset:` stays the FULL git tag, so the asset template is unchanged from v1.
-# Phase 6: GENERATE this file from versions.toml (one package per channel) so adding
-# a channel stays data-only.
+# One package per legacy channel. The version_prefix strips the
+# `emacs-<channel>-` tag prefix so package versions are bare dates
+# (e.g. 2026-06-14). {{.Version}} in `asset:` stays the full git tag.
 #
 # TARBALL LAYOUT (v2, releases after 2026-08-08): the real top-level dir is the STABLE
 # `misemacs/` (Naming.inner_dir/0) and the tar ALSO carries a compat symlink named
@@ -19,15 +19,14 @@
 # by version — mise's aqua backend IGNORES version_constraint/version_overrides (probed
 # on mise 2026.8.3: the top-level branch always wins) — layout compat lives in the tar.
 # The stable dir is the consumer-facing win: installs/<tool>/latest/misemacs/Emacs.app
-# never moves, so one `ln -sfn` into ~/Applications survives `mise up` (README "Open it
-# like an app"). Bound by registry_contract_test.exs + pipeline/package self-verify.
+# never moves for these legacy installs.
 packages:
   - type: github_release
     name: djgoku/misemacs-emacs-master
     version_source: github_tag
     repo_owner: djgoku
     repo_name: misemacs-emacs-master
-    description: Hermetically-built relocatable Emacs.app for macOS — master channel
+    description: "[DEPRECATED] Legacy Aqua releases only; use packslip:github.com/djgoku/misemacs-emacs-master for new signed releases"
     version_prefix: "emacs-master-"
     asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
     format: tar.gz
@@ -61,7 +60,7 @@ packages:
     version_source: github_tag
     repo_owner: djgoku
     repo_name: misemacs-emacs-30
-    description: Hermetically-built relocatable Emacs.app for macOS — emacs-30 channel
+    description: "[DEPRECATED] Legacy Aqua releases only; use packslip:github.com/djgoku/misemacs-emacs-30 for new signed releases"
     version_prefix: "emacs-30-"
     asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
     format: tar.gz
@@ -95,7 +94,7 @@ packages:
     version_source: github_tag
     repo_owner: djgoku
     repo_name: misemacs-emacs-31
-    description: Hermetically-built relocatable Emacs.app for macOS — emacs-31 channel
+    description: "[DEPRECATED] Legacy Aqua releases only; use packslip:github.com/djgoku/misemacs-emacs-31 for new signed releases"
     version_prefix: "emacs-31-"
     asset: misemacs-{{.Version}}-{{.OS}}-{{.Arch}}.tar.gz
     format: tar.gz

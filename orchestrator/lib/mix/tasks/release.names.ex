@@ -3,11 +3,11 @@ defmodule Mix.Tasks.Release.Names do
   @moduledoc """
   Sole bash-facing source of release name strings (spec §4.2). Network-free.
 
-      # snapshot mode (publish computes the next tag, .N on collision):
+      # snapshot mode (publish computes the next SemVer tag):
       mix release.names --channel master --date 2026-06-11 --os macos --arch arm64 --tags-file -
 
       # given-tag mode (package / pregate sentinel — skips Core.Tag):
-      mix release.names --tag emacs-master-2026-06-11 --os macos --arch arm64
+      mix release.names --tag v2026.6.0 --os macos --arch arm64
 
   Output: `key=value` lines — tag, asset, stem, dir (the stable tarball top dir,
   `Naming.inner_dir/0`), checksums (+ `upstream=` when `--version` is given: that

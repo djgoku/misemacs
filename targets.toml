@@ -1,6 +1,6 @@
 # The OS × arch matrix. v1 = macos-arm64 only. Fail-closed: enabled must be explicit.
 [targets.macos-arm64]
-os = "macos"          # aqua {{.OS}} after darwin->macos replacement
-arch = "arm64"        # aqua {{.Arch}}
+os = "macos"          # artifact filename; Packslip records darwin
+arch = "arm64"        # artifact filename; Packslip records aarch64
 runner = "macos-26"   # arm64 hosted runner (bare label = arm64; spec V3)
 enabled = true
