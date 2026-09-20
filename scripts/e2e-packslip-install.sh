@@ -1,19 +1,11 @@
 #!/usr/bin/env bash
-# scripts/e2e-packslip-install.sh <owner/repo> <tag>          (host mode)
-# scripts/e2e-packslip-install.sh --in-vm <owner/repo> <tag>  (inside the VM)
-# The §14 DoD check: a credential-free clean box installs the release exactly like a
-# user (mise use packslip:github.com/<repo>@<version>) and the app runs; then the
-# E7-correct integrity checks (per-Mach-O sentinels, zero quarantine — E1 invariant).
+# scripts/e2e-packslip-install.sh <owner/repo> <tag>
+# Install the release through mise with fresh data and cache directories, launch the
+# app, and check per-Mach-O signatures and quarantine state on the local Mac.
 set -euo pipefail
 
-if [ "${1:-}" != "--in-vm" ]; then
-  REPO="${1:?usage: e2e-packslip-install.sh <owner/repo> <tag>}"
-  TAG="${2:?missing tag}"
-  exec pregate --macos --verbose --cmd "bash scripts/e2e-packslip-install.sh --in-vm '$REPO' '$TAG'"
-fi
-
-shift
-REPO="${1:?}"; TAG="${2:?}"
+REPO="${1:?usage: e2e-packslip-install.sh <owner/repo> <tag>}"
+TAG="${2:?missing tag}"
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FATAL: expected a Packslip SemVer tag, got $TAG"; exit 1; }
 TOOL="packslip:github.com/$REPO@${TAG#v}"
 export MISE_DATA_DIR; MISE_DATA_DIR="$(mktemp -d)"
@@ -28,7 +20,7 @@ mise use "$TOOL"
 echo ">> [2] --batch launch through mise (PATH from the signed Packslip bin entries)"
 mise exec -- Emacs --batch --eval '(princ (format "E2E-BATCH-OK %s\n" emacs-version))'
 
-echo ">> [3] GUI frame smoke (best-effort; VM session has a display per Phase 3)"
+echo ">> [3] GUI frame smoke (best-effort; requires a display session)"
 if mise exec -- Emacs -Q --eval '(run-with-timer 1 nil (lambda () (kill-emacs 0)))' 2>/dev/null; then
   echo "E2E-GUI-OK"
 else
@@ -51,4 +43,4 @@ qcount="$(find "$INSTALL" -exec xattr -l {} + 2>/dev/null | grep -c com.apple.qu
 [ "$qcount" = "0" ] || { echo "FATAL: $qcount quarantine xattrs in the install tree"; exit 1; }
 echo "E2E-NO-QUARANTINE"
 
-echo ">> e2e: PASS — $REPO@$TAG installs and runs on a clean box"
+echo ">> e2e: PASS — $REPO@$TAG installs and runs with fresh mise data and cache"

@@ -27,9 +27,9 @@ defmodule Mix.Tasks.Release.NamesTest do
     assert out["checksums"] == ["SHASUMS256.txt"]
   end
 
-  test "given-tag mode works for arbitrary sentinel tags (pregate)" do
-    out = kv(run(["--tag", "pregate-smoke" | @base_args]))
-    assert out["asset"] == ["misemacs-pregate-smoke-macos-arm64.tar.gz"]
+  test "given-tag mode works for arbitrary sentinel tags" do
+    out = kv(run(["--tag", "smoke-test" | @base_args]))
+    assert out["asset"] == ["misemacs-smoke-test-macos-arm64.tar.gz"]
   end
 
   test "upstream= emitted only with --version (that version's upstream URL)" do

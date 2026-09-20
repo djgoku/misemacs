@@ -26,9 +26,16 @@ EXPECTED_REPO="${MISEMACS_ARTIFACT_BASE:-djgoku/misemacs}-emacs-$CHANNEL"
 if [ "$REPO" != "$EXPECTED_REPO" ]; then
   echo "FATAL: promote --repo '$REPO' / --tag '$TAG' — expected repo '$EXPECTED_REPO' (channel '$CHANNEL')"; exit 1
 fi
-# The artifact repo signs releases asynchronously after gh release create. Wait for every
-# release built in this run before marking one Latest or publishing the merged manifest.
+# The artifact repo signs releases asynchronously after gh release create. Verify every
+# signed archive before publishing the merged manifest or marking one release Latest.
+VERIFY_DIR="$(mktemp -d)"
+trap 'rm -rf "$VERIFY_DIR"' EXIT
+VERIFIED_TAGS=""
 for signed_tag in $TAG $ATTACH; do
+  [[ "$signed_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+    echo "FATAL: invalid Packslip tag '$signed_tag'"; exit 1; }
+  case " $VERIFIED_TAGS " in *" $signed_tag "*) continue ;; esac
+  VERIFIED_TAGS="$VERIFIED_TAGS $signed_tag"
   ready=false
   for attempt in {1..60}; do
     if gh release view "$signed_tag" --repo "$REPO" --json assets --jq '.assets[].name' \
@@ -39,6 +46,30 @@ for signed_tag in $TAG $ATTACH; do
     sleep 10
   done
   [ "$ready" = true ] || { echo "FATAL: $REPO@$signed_tag has no signed Packslip after 10 minutes"; exit 1; }
+
+  ASSET="misemacs-${signed_tag}-macos-arm64.tar.gz"
+  RELEASE_DIR="$VERIFY_DIR/$signed_tag"
+  mkdir -p "$RELEASE_DIR"
+  gh release download "$signed_tag" --repo "$REPO" --dir "$RELEASE_DIR" \
+    --pattern packslip.sigstore.json --pattern "$ASSET"
+  BUNDLE="$RELEASE_DIR/packslip.sigstore.json"
+  ARCHIVE="$RELEASE_DIR/$ASSET"
+  [ -s "$BUNDLE" ] && [ -s "$ARCHIVE" ] || {
+    echo "FATAL: $REPO@$signed_tag is missing its Packslip bundle or archive"; exit 1; }
+
+  echo ">> verify $REPO@$signed_tag signature, signer, and archive digest"
+  packslip verify "$BUNDLE" \
+    --identity "https://github.com/$REPO/.github/workflows/packslip.yml@refs/tags/$signed_tag" \
+    --issuer https://token.actions.githubusercontent.com \
+    --artifact "$ARCHIVE"
+  packslip show "$BUNDLE" | jq -e \
+    --arg project "github.com/$REPO" \
+    --arg repo "https://github.com/$REPO" \
+    --arg version "${signed_tag#v}" \
+    --arg tag "$signed_tag" \
+    '.predicate.project == $project and .predicate.source.repo == $repo and
+     .predicate.version == $version and .predicate.source.tag == $tag' >/dev/null || {
+    echo "FATAL: $REPO@$signed_tag Packslip identifies a different project or release"; exit 1; }
 done
 if [ -n "$MANIFEST" ]; then
   # Phase-5 finalize path: caller supplies the merged manifest; the release + assets already

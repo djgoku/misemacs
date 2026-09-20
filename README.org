@@ -185,7 +185,7 @@ The layout contract is enforced by the =version_layout_test= (every =versions.to
 
 * Development
 
-misemacs uses [[https://mise.jdx.dev/][mise]] as the one task runner across local dev, the pregate hooks, and CI:
+misemacs uses [[https://mise.jdx.dev/][mise]] as the task runner across local development and CI:
 
 #+begin_src sh
 mise run test     # orchestrator ExUnit suite (mix test --warnings-as-errors)
@@ -195,7 +195,7 @@ mise run fmt      # mix format
 
 Heavier build-related tasks (run =mise tasks= for the full list): =build=, =relocate=, =package=, =publish=, =configure-check=, =cleanroom=, =decide=, =finalize=.
 
-Before pushing, the =.pregate/= hooks run the test/lint suite on Linux and a no-pixi cleanroom launch inside a disposable macOS VM. Design specs, per-phase plans, and the validation log live under [[docs/superpowers/][=docs/superpowers/=]].
+Run =mise run test= and =mise run lint= before pushing. After building, staging enchant, and relocating the app, =mise run cleanroom= checks a launch with the pixi environment moved aside. =mise run e2e -- <owner/repo> <tag>= checks a published Packslip release on a local Mac with fresh mise data and cache directories. Design specs, per-phase plans, and the validation log live under [[docs/superpowers/][=docs/superpowers/=]].
 
 * Status
 

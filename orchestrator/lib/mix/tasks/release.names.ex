@@ -6,7 +6,7 @@ defmodule Mix.Tasks.Release.Names do
       # snapshot mode (publish computes the next SemVer tag):
       mix release.names --channel master --date 2026-06-11 --os macos --arch arm64 --tags-file -
 
-      # given-tag mode (package / pregate sentinel — skips Core.Tag):
+      # given-tag mode (package / smoke-test sentinel — skips Core.Tag):
       mix release.names --tag v2026.6.0 --os macos --arch arm64
 
   Output: `key=value` lines — tag, asset, stem, dir (the stable tarball top dir,
