@@ -147,7 +147,7 @@ misemacs/
 │   ├── emacs-30/          # … release branches use their compatible locked deps
 │   └── emacs-31/
 ├── orchestrator/          # Elixir brain: pure decision fns + Mix tasks (ExUnit-tested)
-├── pipeline/              # bash stages: build-emacs, package, publish, promote
+├── pipeline/              # bash stages: build-emacs, package, publish, promote; app launchers
 ├── scripts/               # configure-check, e2e-packslip-install
 ├── templates/             # Packslip release workflow installed in each artifact repo
 ├── mise.toml              # shared task seam (test/lint/build/decide/finalize/…)

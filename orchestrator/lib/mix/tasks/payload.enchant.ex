@@ -1,19 +1,23 @@
 defmodule Mix.Tasks.Payload.Enchant do
-  @shortdoc "Stage (copy) the bundled enchant payload into an Emacs.app"
+  @shortdoc "Stage (copy) the bundled enchant payload into build/<version>/Emacs.app"
   @moduledoc """
-  Usage: `mix payload.enchant <Emacs.app path> <conda_prefix>` (conda_prefix = `$CONDA_PREFIX`).
+  Usage: `mix payload.enchant [version] [--root ..]` (version defaults to master).
 
   Copy-only: stages enchant + its dylib closure + the generated files into
-  `Emacs.app/Contents/Resources/enchant/`. Relocation, per-file signing, and the
-  self-containment gate run later as part of `mix relocate` (Task 4).
+  `Emacs.app/Contents/Resources/enchant/`. Run after `mise run build` and before
+  `mise run relocate`, which relocates, signs, and gates the payload.
   """
   use Mix.Task
+  alias Orchestrator.BuildDir
   alias Orchestrator.Payload.Enchant
 
   @impl true
-  def run([app, conda_prefix]) do
-    :ok = Enchant.stage_copy(app, conda_prefix)
-  end
+  def run(argv) do
+    {root, version} = Mix.Tasks.Relocate.parse(argv)
 
-  def run(_), do: Mix.raise("usage: mix payload.enchant <Emacs.app path> <conda_prefix>")
+    case BuildDir.load(root, version) do
+      {:ok, build} -> :ok = Enchant.stage_copy(build.app, BuildDir.conda_prefix(build))
+      {:error, msg} -> Mix.raise(msg)
+    end
+  end
 end

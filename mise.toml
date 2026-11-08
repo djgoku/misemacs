@@ -83,11 +83,13 @@ run = "bash pipeline/build-emacs"
 
 [tasks.relocate]
 description = "Phase 2: bundle + relocate the built Emacs.app into a self-contained app (Elixir; otool gate); args: [version] (default master)"
-run = "bash pipeline/relocate"
+dir = "orchestrator"
+run = "mix relocate"
 
 [tasks.stage-enchant]
 description = "Phase 2: copy the bundled enchant payload into the built Emacs.app (run AFTER build, BEFORE relocate); args: [version] (default master)"
-run = "bash pipeline/stage-enchant"
+dir = "orchestrator"
+run = "mix payload.enchant"
 
 [tasks.package]
 description = "Phase 4: package build/<v>/Emacs.app into dist/<v>/ (xattr-free tar + SHASUMS256.txt + self-verify); args: <version> <tag> [--upstream-sha <sha>]"
