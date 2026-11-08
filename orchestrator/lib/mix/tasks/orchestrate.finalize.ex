@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Orchestrate.Finalize do
   merges them into the prior `latest` manifest (`Releases`), writes the merged
   `build-manifest.json` to `--out`, and prints `latest_tag=<tag>` (empty ⇒ nothing to
   finalize, no flip) and `built_tags=<space-separated>` (every released tag this run). The
-  bash `pipeline/promote --manifest --attach "$built_tags"` then attaches the merged manifest
+  `mix release.promote --manifest --attach "$built_tags"` then attaches the merged manifest
   to EVERY built release and flips Latest to `latest_tag`.
 
       mix orchestrate.finalize --repo <owner/repo> --fragments <dir> --out <path>

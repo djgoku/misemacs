@@ -292,7 +292,7 @@ defmodule Orchestrator.Payload.Enchant do
     File.chmod!(to, 0o644)
   end
 
-  # R3: enchant-2 / enchant-lsmod-2 are executables; pipeline/package's `-x` check needs 0755.
+  # R3: enchant-2 / enchant-lsmod-2 are executables; `mix release.package`'s executable check needs 0755.
   defp cp_exec!(from, to) do
     File.cp!(from, to)
     File.chmod!(to, 0o755)

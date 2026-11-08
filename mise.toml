@@ -6,9 +6,7 @@
 erlang = "29.1.2"
 elixir = "1.20.5-otp-29"
 pixi   = "0.84.1"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
-# pipeline/publish, pipeline/promote, and the daily decide step parse JSON with jq.
-jq = "1.8.2"
-# Used by pipeline/promote in the daily finalize job. mise verifies the Sigstore signature against the Packslip release workflow.
+# Used by `mix release.promote` in the daily finalize job. mise verifies the Sigstore signature against the Packslip release workflow.
 packslip = { version = "1.11.3", identity_prefix = "https://github.com/jdx/packslip/.github/workflows/release.yml@", issuer = "https://token.actions.githubusercontent.com", list_identity_prefix = "https://github.com/jdx/packslip/.github/workflows/packslip-releases.yml@" }
 
 [env]
@@ -92,16 +90,19 @@ dir = "orchestrator"
 run = "mix payload.enchant"
 
 [tasks.package]
-description = "Phase 4: package build/<v>/Emacs.app into dist/<v>/ (xattr-free tar + SHASUMS256.txt + self-verify); args: <version> <tag> [--upstream-sha <sha>]"
-run = "bash pipeline/package"
+description = "Phase 4: package build/<v>/Emacs.app into dist/<v>/ (xattr-free tar + SHASUMS256.txt + self-verify); args: <version> [<tag>] [--upstream-sha <sha>] (no tag: today's first tag, for dry runs)"
+dir = "orchestrator"
+run = "mix release.package"
 
 [tasks.publish]
 description = "Create a release with asset+SHASUMS; requires the artifact repo Packslip workflow; args: --repo <owner/repo> [--version v]"
-run = "bash pipeline/publish"
+dir = "orchestrator"
+run = "mix release.publish"
 
 [tasks.promote]
-description = "Attach build-manifest.json + flip Latest; args: --repo <owner/repo> --tag <tag> --channel <channel>"
-run = "bash pipeline/promote"
+description = "Attach build-manifest.json + flip Latest; args: --repo <owner/repo> --tag <tag> --channel <channel> [--manifest <path>] [--attach \"t1 t2\"]"
+dir = "orchestrator"
+run = "mix release.promote"
 
 [tasks.e2e]
 description = "Install via mise/packslip with fresh mise data and cache on this Mac; args: <owner/repo> <tag>"
