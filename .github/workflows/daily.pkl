@@ -92,7 +92,7 @@ jobs {
           # Only the key=value lines go to $GITHUB_OUTPUT — `mise run decide` also emits
           # first-run `mix compile` noise on stdout, which would corrupt the output file.
           mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" | tee /tmp/decide.out
-          grep -E '^(matrix|any)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
+          grep -E '^(matrix|channels|any)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
           # decide only reports dry_run for --mode dry-run, so a manual dispatch would otherwise
           # publish for real. Publishing is opt-in: dispatch is a test run unless `deploy` is
           # checked. Overriding here (not the mode) keeps force_version targeting one version.
@@ -100,10 +100,6 @@ jobs {
           if [ "$EVENT" = "workflow_dispatch" ] && [ "$DEPLOY" != "true" ]; then DRY=true; fi
           echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
           cat /tmp/decide.out >> "$GITHUB_STEP_SUMMARY"
-          # Distinct {channel,repo} built this run, for the finalize matrix.
-          MATRIX="$(sed -n 's/^matrix=//p' /tmp/decide.out)"
-          CHANNELS="$(printf '%s' "$MATRIX" | jq -c '[.include[] | {channel, repo}] | unique')"
-          echo "channels=$CHANNELS" >> "$GITHUB_OUTPUT"
           """#
       }
     }

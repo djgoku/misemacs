@@ -40,6 +40,11 @@ defmodule Mix.Tasks.Orchestrate.DecideTest do
       end)
 
     assert out =~ ~r/^matrix=\{"include":\[/m
+    assert [_, json] = Regex.run(~r/^channels=(.*)$/m, out)
+
+    assert [%{"channel" => "30.2", "repo" => _}, %{"channel" => "master", "repo" => _}] =
+             JSON.decode!(json)
+
     assert out =~ "any=true"
     assert out =~ "dry_run=true"
   end

@@ -29,7 +29,14 @@ defmodule Orchestrator.Orchestrate do
       end
 
     cells = Decide.matrix(plan, jobs)
-    %{matrix: %{"include" => cells}, any: cells != [], dry_run: mode == "dry-run"}
+    channels = cells |> Enum.map(&Map.take(&1, [:channel, :repo])) |> Enum.uniq() |> Enum.sort()
+
+    %{
+      matrix: %{"include" => cells},
+      channels: channels,
+      any: cells != [],
+      dry_run: mode == "dry-run"
+    }
   end
 
   defp all(versions, date) do
