@@ -2,8 +2,8 @@ defmodule Mix.Tasks.Orchestrate.Decide do
   @shortdoc "Emit the dynamic build matrix + gate flags (spec §4.2)"
   @moduledoc """
   The decide-gate brain. Modes: `detect` (compare upstream+inputs vs the latest manifest),
-  `force` (one ref), `dry-run` (all enabled, PR). Prints `key=value` lines (matrix JSON, any,
-  dry_run) for `>> "$GITHUB_OUTPUT"`. IO (git ls-remote / gh / clang) is gathered here and
+  `force` (one ref), `dry-run` (all enabled, PR). Prints `key=value` lines (matrix JSON, the
+  distinct `{channel, repo}` JSON for finalize, any, dry_run) for `>> "$GITHUB_OUTPUT"`. IO (git ls-remote / gh / clang) is gathered here and
   handed to the pure `Orchestrator.Orchestrate`.
 
       mix orchestrate.decide --repo <owner/repo> --date 2026-06-13 --mode detect [--root ..]
@@ -82,8 +82,9 @@ defmodule Mix.Tasks.Orchestrate.Decide do
     end
   end
 
-  defp emit(%{matrix: matrix, any: any, dry_run: dry_run}) do
+  defp emit(%{matrix: matrix, channels: channels, any: any, dry_run: dry_run}) do
     IO.puts("matrix=#{JSON.encode!(matrix)}")
+    IO.puts("channels=#{JSON.encode!(channels)}")
     IO.puts("any=#{any}")
     IO.puts("dry_run=#{dry_run}")
   end

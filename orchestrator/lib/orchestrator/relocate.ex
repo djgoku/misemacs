@@ -42,7 +42,7 @@ defmodule Orchestrator.Relocate do
         IO.puts("sign_gate: PASS (#{app} signature valid)")
 
         # `Path.dirname(build_libdir)` reconstructs the conda_prefix from the libdir the caller
-        # passed (pipeline/relocate sources it from build/<v>/conda-prefix-lib.txt, whose content
+        # passed (`mix relocate` sources it from build/<v>/conda-prefix-lib.txt, whose content
         # is `<conda_prefix>/lib`). Enchant.verify no longer consumes conda_prefix (the build-prefix
         # leak_check was dropped, 2026-06-28) — kept here for arity/signature stability.
         enchant_result =

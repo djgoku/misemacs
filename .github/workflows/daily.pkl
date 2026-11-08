@@ -92,7 +92,7 @@ jobs {
           # Only the key=value lines go to $GITHUB_OUTPUT — `mise run decide` also emits
           # first-run `mix compile` noise on stdout, which would corrupt the output file.
           mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" | tee /tmp/decide.out
-          grep -E '^(matrix|any)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
+          grep -E '^(matrix|channels|any)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
           # decide only reports dry_run for --mode dry-run, so a manual dispatch would otherwise
           # publish for real. Publishing is opt-in: dispatch is a test run unless `deploy` is
           # checked. Overriding here (not the mode) keeps force_version targeting one version.
@@ -100,10 +100,6 @@ jobs {
           if [ "$EVENT" = "workflow_dispatch" ] && [ "$DEPLOY" != "true" ]; then DRY=true; fi
           echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
           cat /tmp/decide.out >> "$GITHUB_STEP_SUMMARY"
-          # Distinct {channel,repo} built this run, for the finalize matrix.
-          MATRIX="$(sed -n 's/^matrix=//p' /tmp/decide.out)"
-          CHANNELS="$(printf '%s' "$MATRIX" | jq -c '[.include[] | {channel, repo}] | unique')"
-          echo "channels=$CHANNELS" >> "$GITHUB_OUTPUT"
           """#
       }
     }
@@ -157,13 +153,9 @@ jobs {
           #"""
           set -euo pipefail
           if [ "${{ needs.decide.outputs.dry_run }}" = "true" ]; then
-            TAG="$(cd orchestrator && mise exec -- mix release.names \
-              --channel '${{ matrix.channel }}' --date "$(date -u +%F)" \
-              --os '${{ matrix.os }}' --arch '${{ matrix.arch }}' --tags-file /dev/null \
-              | sed -n 's/^tag=//p')"
-            mise run package "${{ matrix.name }}" "$TAG"
+            mise run package "${{ matrix.name }}"
           else
-            mise run publish -- --repo "${{ matrix.repo }}" --version "${{ matrix.name }}" --channel "${{ matrix.channel }}"
+            mise run publish -- --repo "${{ matrix.repo }}" --version "${{ matrix.name }}"
           fi
           """#
       }
@@ -230,7 +222,7 @@ jobs {
           LATEST_TAG="$(printf '%s\n' "$FIN" | sed -n 's/^latest_tag=//p')"
           BUILT_TAGS="$(printf '%s\n' "$FIN" | sed -n 's/^built_tags=//p')"
           if [ -z "$LATEST_TAG" ]; then echo "no fragments for ${{ matrix.repo }}"; exit 0; fi
-          bash pipeline/promote --repo "${{ matrix.repo }}" --tag "$LATEST_TAG" \
+          mise run promote -- --repo "${{ matrix.repo }}" --tag "$LATEST_TAG" \
             --channel "${{ matrix.channel }}" \
             --manifest "$GITHUB_WORKSPACE/dist/build-manifest.json" \
             --attach "$BUILT_TAGS"

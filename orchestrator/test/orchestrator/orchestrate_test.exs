@@ -46,6 +46,22 @@ defmodule Orchestrator.OrchestrateTest do
     assert out.dry_run == true
   end
 
+  test "channels: one {channel, repo} per artifact repo, sorted, extra cell keys dropped" do
+    jobs = [
+      %{name: "master", channel: "master", repo: "o/r-emacs-master", target: "a"},
+      %{name: "emacs-31", channel: "31", repo: "o/r-emacs-31", target: "a"},
+      %{name: "emacs-31", channel: "31", repo: "o/r-emacs-31", target: "b"}
+    ]
+
+    versions = [%{name: "master", channel: "master"}, %{name: "emacs-31", channel: "31"}]
+    out = Orchestrate.decide_outputs("dry-run", versions, jobs, %{}, nil, "2026-06-13", nil)
+
+    assert out.channels == [
+             %{channel: "31", repo: "o/r-emacs-31"},
+             %{channel: "master", repo: "o/r-emacs-master"}
+           ]
+  end
+
   test "finalize_outputs merges fragments and picks the last built tag" do
     repo = "djgoku/misemacs-emacs-master"
 
