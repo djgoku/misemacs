@@ -51,6 +51,22 @@ run = "mix format --check-formatted"
 dir = "orchestrator"
 run = "mix format"
 
+[tasks.generate-workflows]
+description = "Regenerate the GitHub Actions YAML (SHA-pinned via DependabotManagedActions) from the Pkl sources"
+tools = { pkl = "0.32.1" }
+run = "pkl eval --project-dir .github/ -m .github/ .github/index.pkl"
+
+[tasks.check-workflows]
+description = "Fail if the generated workflow YAML has drifted from its Pkl sources"
+tools = { pkl = "0.32.1" }
+run = '''
+set -eu
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+pkl eval --project-dir .github/ -m "$tmp" .github/index.pkl >/dev/null
+(cd "$tmp" && find . -type f) | while read -r f; do diff -u ".github/$f" "$tmp/$f"; done
+'''
+
 [tasks.configure-check]
 description = "Phase 1: fetch Emacs + ./configure against the per-version pixi env; assert feature detection (configure-only); args: [version] (default master)"
 run = "bash scripts/configure-check.sh"
