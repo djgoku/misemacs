@@ -3,9 +3,11 @@
 # entries for (linux finalize runner), racing builds.hex.pm's precompiled publication —
 # OTP-29.0.3 released 2026-07-02 15:06Z, its ubuntu-24.04 tarball still 404'd 19h later
 # (lab run 28597701653 failed exactly this way). Bump deliberately, with the lock.
-erlang = "29.0.5"
-elixir = "1.20.3-otp-29"
-pixi   = "0.76.1"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
+erlang = "29.1.2"
+elixir = "1.20.5-otp-29"
+pixi   = "0.84.1"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
+# Used by pipeline/promote in the daily finalize job. mise verifies the Sigstore signature against the Packslip release workflow.
+packslip = { version = "1.11.3", identity_prefix = "https://github.com/jdx/packslip/.github/workflows/release.yml@", issuer = "https://token.actions.githubusercontent.com", list_identity_prefix = "https://github.com/jdx/packslip/.github/workflows/packslip-releases.yml@" }
 
 [env]
 # DEFAULT upstream Emacs repo URL, shared by all versions. Per-version override: `upstream`
