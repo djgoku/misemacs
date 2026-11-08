@@ -6,6 +6,8 @@
 erlang = "29.1.2"
 elixir = "1.20.5-otp-29"
 pixi   = "0.84.1"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
+# pipeline/publish, pipeline/promote, and the daily decide step parse JSON with jq.
+jq = "1.8.2"
 # Used by pipeline/promote in the daily finalize job. mise verifies the Sigstore signature against the Packslip release workflow.
 packslip = { version = "1.11.3", identity_prefix = "https://github.com/jdx/packslip/.github/workflows/release.yml@", issuer = "https://token.actions.githubusercontent.com", list_identity_prefix = "https://github.com/jdx/packslip/.github/workflows/packslip-releases.yml@" }
 
