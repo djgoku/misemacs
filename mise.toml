@@ -3,9 +3,13 @@
 # entries for (linux finalize runner), racing builds.hex.pm's precompiled publication —
 # OTP-29.0.3 released 2026-07-02 15:06Z, its ubuntu-24.04 tarball still 404'd 19h later
 # (lab run 28597701653 failed exactly this way). Bump deliberately, with the lock.
-erlang = "29.0.5"
-elixir = "1.20.3-otp-29"
-pixi   = "0.76.1"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
+erlang = "29.1.2"
+elixir = "1.20.5-otp-29"
+pixi   = "0.84.1"   # EXACT pin (not "latest"): deterministic toolchain_hash; no cold-cache lock churn
+# pipeline/publish, pipeline/promote, and the daily decide step parse JSON with jq.
+jq = "1.8.2"
+# Used by pipeline/promote in the daily finalize job. mise verifies the Sigstore signature against the Packslip release workflow.
+packslip = { version = "1.11.3", identity_prefix = "https://github.com/jdx/packslip/.github/workflows/release.yml@", issuer = "https://token.actions.githubusercontent.com", list_identity_prefix = "https://github.com/jdx/packslip/.github/workflows/packslip-releases.yml@" }
 
 [env]
 # DEFAULT upstream Emacs repo URL, shared by all versions. Per-version override: `upstream`
@@ -48,6 +52,26 @@ run = "mix format --check-formatted"
 [tasks.fmt]
 dir = "orchestrator"
 run = "mix format"
+
+[tasks.generate-workflows]
+description = "Regenerate the GitHub Actions YAML (SHA-pinned via DependabotManagedActions) from the Pkl sources"
+tools = { pkl = "0.32.1" }
+run = "pkl eval --project-dir .github/ -m .github/ .github/index.pkl"
+
+[tasks.check-workflows]
+description = "Fail if the generated workflow YAML has drifted from its Pkl sources"
+tools = { pkl = "0.32.1" }
+run = '''
+set -eu
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+pkl eval --project-dir .github/ -m "$tmp" .github/index.pkl >/dev/null
+(cd "$tmp" && find . -type f) | while read -r f; do diff -u ".github/$f" "$tmp/$f"; done
+'''
+
+[tasks.outdated]
+description = "List available updates (report-only): mise tools, per-version pixi envs, pixi git sources, GitHub Actions"
+run = "elixir scripts/outdated.exs"
 
 [tasks.configure-check]
 description = "Phase 1: fetch Emacs + ./configure against the per-version pixi env; assert feature detection (configure-only); args: [version] (default master)"

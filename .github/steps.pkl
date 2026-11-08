@@ -1,0 +1,23 @@
+/// Steps shared by every job: checkout, mise, and the toolchain.
+module steps
+
+import "@com.github.actions/Workflow.pkl"
+
+setup: Listing<Workflow.Step> = new {
+  new { uses = "actions/checkout@v7" }
+  new {
+    uses = "jdx/mise-action@v5"
+    with {
+      // mise-action auto-adds --locked when mise.lock exists, and core:erlang has no lock URL.
+      ["install"] = false
+    }
+  }
+  new {
+    name = "install toolchain + orchestrator deps"
+    run =
+      """
+      mise install
+      (cd orchestrator && mise exec -- mix deps.get)
+      """
+  }
+}

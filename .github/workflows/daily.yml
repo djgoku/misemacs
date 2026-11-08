@@ -1,228 +1,199 @@
+# Generated from Workflow.pkl. DO NOT EDIT.
 name: daily
-on:
+'on':
+  pull_request:
+    paths:
+    - versions/**
+    - '**/*.toml'
   schedule:
-    - cron: '0 7 * * *'        # daily; activated by the cutover push to main (A10)
+  - cron: 0 7 * * *
   workflow_dispatch:
     inputs:
       force_version:
-        description: 'Build exactly this version (bypass detect); blank = run detect now'
+        description: Build exactly this version (bypass detect); blank = run detect now
+        required: false
         type: string
-        required: false
       deploy:
-        description: 'Publish releases + flip Latest. Unchecked = test run (build, package, upload tarball as a run artifact only).'
-        type: boolean
-        default: false
+        description: Publish releases + flip Latest. Unchecked = test run (build, package, upload tarball as a run artifact only).
         required: false
-  pull_request:
-    paths: ['versions/**', '**/*.toml']
-
+        type: boolean
+env:
+  MISEMACS_ARTIFACT_BASE: ${{ github.repository }}
 permissions:
   contents: read
-
-env:
-  # Repo-relative so the lab (djgoku/misemacs-phase5-lab) targets its OWN artifact repos
-  # (…-phase5-lab-emacs-<channel>) and prod (djgoku/misemacs) targets misemacs-emacs-<channel>.
-  MISEMACS_ARTIFACT_BASE: ${{ github.repository }}
-
-# No workflow-level concurrency: serialization is per-job (build-<name>-<target> +
-# finalize-latest), so distinct cells run in parallel and only same-cell / latest collide.
-
 jobs:
   decide:
     runs-on: macos-26
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       matrix: ${{ steps.decide.outputs.matrix }}
       any: ${{ steps.decide.outputs.any }}
       dry_run: ${{ steps.decide.outputs.dry_run }}
       channels: ${{ steps.decide.outputs.channels }}
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-        with:
-          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
-          install: false      # plain `mise install` below — core:erlang has no lock URL, so auto `--locked` aborts
-      - name: install toolchain + orchestrator deps
-        run: |
-          mise install
-          (cd orchestrator && mise exec -- mix deps.get)
-      - id: decide
-        env:
-          # Via env, not inline ${{ }}: keeps a string input out of the shell's parse tree.
-          EVENT: ${{ github.event_name }}
-          FORCE: ${{ inputs.force_version }}
-          DEPLOY: ${{ inputs.deploy }}
-        run: |
-          set -euo pipefail
-          if   [ "$EVENT" = "pull_request" ]; then set -- --mode dry-run
-          elif [ "$EVENT" = "workflow_dispatch" ] && [ -n "$FORCE" ]; then set -- --mode force --force-version "$FORCE"
-          else set -- --mode detect; fi
-          # Only the key=value lines go to $GITHUB_OUTPUT — `mise run decide` also emits
-          # first-run `mix compile` noise on stdout, which would corrupt the output file.
-          mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" | tee /tmp/decide.out
-          grep -E '^(matrix|any)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
-          # decide only reports dry_run for --mode dry-run, so a manual dispatch would otherwise
-          # publish for real. Publishing is opt-in: dispatch is a test run unless `deploy` is
-          # checked. Overriding here (not the mode) keeps force_version targeting one version.
-          DRY="$(sed -n 's/^dry_run=//p' /tmp/decide.out)"
-          if [ "$EVENT" = "workflow_dispatch" ] && [ "$DEPLOY" != "true" ]; then DRY=true; fi
-          echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
-          cat /tmp/decide.out >> "$GITHUB_STEP_SUMMARY"
-          # Distinct {channel,repo} built this run, for the finalize matrix.
-          MATRIX="$(sed -n 's/^matrix=//p' /tmp/decide.out)"
-          CHANNELS="$(printf '%s' "$MATRIX" | jq -c '[.include[] | {channel, repo}] | unique')"
-          echo "channels=$CHANNELS" >> "$GITHUB_OUTPUT"
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+      with:
+        install: false
+    - name: install toolchain + orchestrator deps
+      run: |-
+        mise install
+        (cd orchestrator && mise exec -- mix deps.get)
+    - id: decide
+      env:
+        EVENT: ${{ github.event_name }}
+        FORCE: ${{ inputs.force_version }}
+        DEPLOY: ${{ inputs.deploy }}
+      run: |-
+        set -euo pipefail
+        if   [ "$EVENT" = "pull_request" ]; then set -- --mode dry-run
+        elif [ "$EVENT" = "workflow_dispatch" ] && [ -n "$FORCE" ]; then set -- --mode force --force-version "$FORCE"
+        else set -- --mode detect; fi
+        # Only the key=value lines go to $GITHUB_OUTPUT — `mise run decide` also emits
+        # first-run `mix compile` noise on stdout, which would corrupt the output file.
+        mise run decide -- --repo "${{ github.repository }}" --date "$(date -u +%F)" "$@" | tee /tmp/decide.out
+        grep -E '^(matrix|any)=' /tmp/decide.out >> "$GITHUB_OUTPUT"
+        # decide only reports dry_run for --mode dry-run, so a manual dispatch would otherwise
+        # publish for real. Publishing is opt-in: dispatch is a test run unless `deploy` is
+        # checked. Overriding here (not the mode) keeps force_version targeting one version.
+        DRY="$(sed -n 's/^dry_run=//p' /tmp/decide.out)"
+        if [ "$EVENT" = "workflow_dispatch" ] && [ "$DEPLOY" != "true" ]; then DRY=true; fi
+        echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
+        cat /tmp/decide.out >> "$GITHUB_STEP_SUMMARY"
+        # Distinct {channel,repo} built this run, for the finalize matrix.
+        MATRIX="$(sed -n 's/^matrix=//p' /tmp/decide.out)"
+        CHANNELS="$(printf '%s' "$MATRIX" | jq -c '[.include[] | {channel, repo}] | unique')"
+        echo "channels=$CHANNELS" >> "$GITHUB_OUTPUT"
   build:
-    needs: decide
     if: needs.decide.outputs.any == 'true'
-    runs-on: ${{ matrix.runner }}
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.decide.outputs.matrix) }}
+    needs: decide
     concurrency:
       group: build-${{ matrix.name }}-${{ matrix.target }}
       cancel-in-progress: false
+    strategy:
+      matrix: ${{ fromJSON(needs.decide.outputs.matrix) }}
+      fail-fast: false
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.runner }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-        with:
-          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
-          install: false      # plain `mise install` below — core:erlang has no lock URL, so auto `--locked` aborts
-      - name: install toolchain + orchestrator deps
-        run: |
-          mise install
-          (cd orchestrator && mise exec -- mix deps.get)
-      - name: pixi-env cache
-        uses: actions/cache@v5
-        with:
-          path: versions/${{ matrix.name }}/.pixi
-          key: pixi-${{ matrix.target }}-${{ hashFiles(format('versions/{0}/pixi.lock', matrix.name)) }}
-      - name: build + stage enchant + relocate
-        run: |
-          set -euo pipefail
-          mise run build "${{ matrix.name }}"
-          mise run stage-enchant "${{ matrix.name }}"
-          mise run relocate "${{ matrix.name }}"
-      - name: cleanroom (no-pixi launch + enchant gate)
-        run: mise run cleanroom "${{ matrix.name }}"
-      - name: repo name (from GITHUB_REPOSITORY — set on every trigger; event.repository is not guaranteed for schedule)
-        id: reponame
-        run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
-      - name: mint publish token (App, just-in-time)
-        if: needs.decide.outputs.dry_run != 'true'
-        id: pubtoken
-        uses: actions/create-github-app-token@v3
-        with:
-          # Numeric App ID is accepted here: the action reads client-id || app-id into the
-          # same JWT iss field (app-id is just the deprecated input name).
-          client-id: ${{ secrets.MISEMACS_APP_ID }}
-          private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          # <name>-emacs-<channel> — convention owned by Orchestrator.Naming.artifact_repo/2.
-          repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
-      - name: publish (real) or package+artifact (dry-run)
-        env:
-          GH_TOKEN: ${{ steps.pubtoken.outputs.token || github.token }}
-        run: |
-          set -euo pipefail
-          if [ "${{ needs.decide.outputs.dry_run }}" = "true" ]; then
-            TAG="$(cd orchestrator && mise exec -- mix release.names \
-              --channel '${{ matrix.channel }}' --date "$(date -u +%F)" \
-              --os '${{ matrix.os }}' --arch '${{ matrix.arch }}' --tags-file /dev/null \
-              | sed -n 's/^tag=//p')"
-            mise run package "${{ matrix.name }}" "$TAG"
-          else
-            mise run publish -- --repo "${{ matrix.repo }}" --version "${{ matrix.name }}" --channel "${{ matrix.channel }}"
-          fi
-      - name: manifest fragment (real only)
-        if: needs.decide.outputs.dry_run != 'true'
-        run: |
-          set -euo pipefail
-          TAG="$(cat dist/${{ matrix.name }}/published-tag.txt)"
-          SHA="$(cat dist/${{ matrix.name }}/upstream-sha.txt)"
-          (cd orchestrator && mise exec -- mix release.manifest \
-            --version "${{ matrix.name }}" --tag "$TAG" --upstream-sha "$SHA" \
-            --root .. --out "../dist/${{ matrix.name }}/build-manifest.json")
-      - name: upload fragment (real) / tarball (dry-run)
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ needs.decide.outputs.dry_run == 'true' && format('dryrun-{0}-{1}', matrix.name, matrix.target) || format('manifest-{0}-{1}', matrix.name, matrix.target) }}
-          path: ${{ needs.decide.outputs.dry_run == 'true' && format('dist/{0}/*.tar.gz', matrix.name) || format('dist/{0}/build-manifest.json', matrix.name) }}
-          if-no-files-found: error
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+      with:
+        install: false
+    - name: install toolchain + orchestrator deps
+      run: |-
+        mise install
+        (cd orchestrator && mise exec -- mix deps.get)
+    - name: pixi-env cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: versions/${{ matrix.name }}/.pixi
+        key: pixi-${{ matrix.target }}-${{ hashFiles(format('versions/{0}/pixi.lock', matrix.name)) }}
+    - name: build + stage enchant + relocate
+      run: |-
+        set -euo pipefail
+        mise run build "${{ matrix.name }}"
+        mise run stage-enchant "${{ matrix.name }}"
+        mise run relocate "${{ matrix.name }}"
+    - name: cleanroom (no-pixi launch + enchant gate)
+      run: mise run cleanroom "${{ matrix.name }}"
+    - name: repo name (from GITHUB_REPOSITORY — set on every trigger; event.repository is not guaranteed for schedule)
+      id: reponame
+      run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+    - name: mint publish token (App, just-in-time)
+      id: pubtoken
+      if: needs.decide.outputs.dry_run != 'true'
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      with:
+        client-id: ${{ secrets.MISEMACS_APP_ID }}
+        private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+        repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
+    - name: publish (real) or package+artifact (dry-run)
+      env:
+        GH_TOKEN: ${{ steps.pubtoken.outputs.token || github.token }}
+      run: |-
+        set -euo pipefail
+        if [ "${{ needs.decide.outputs.dry_run }}" = "true" ]; then
+          TAG="$(cd orchestrator && mise exec -- mix release.names \
+            --channel '${{ matrix.channel }}' --date "$(date -u +%F)" \
+            --os '${{ matrix.os }}' --arch '${{ matrix.arch }}' --tags-file /dev/null \
+            | sed -n 's/^tag=//p')"
+          mise run package "${{ matrix.name }}" "$TAG"
+        else
+          mise run publish -- --repo "${{ matrix.repo }}" --version "${{ matrix.name }}" --channel "${{ matrix.channel }}"
+        fi
+    - name: manifest fragment (real only)
+      if: needs.decide.outputs.dry_run != 'true'
+      run: |-
+        set -euo pipefail
+        TAG="$(cat dist/${{ matrix.name }}/published-tag.txt)"
+        SHA="$(cat dist/${{ matrix.name }}/upstream-sha.txt)"
+        (cd orchestrator && mise exec -- mix release.manifest \
+          --version "${{ matrix.name }}" --tag "$TAG" --upstream-sha "$SHA" \
+          --root .. --out "../dist/${{ matrix.name }}/build-manifest.json")
+    - name: upload fragment (real) / tarball (dry-run)
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      with:
+        name: ${{ needs.decide.outputs.dry_run == 'true' && format('dryrun-{0}-{1}', matrix.name, matrix.target) || format('manifest-{0}-{1}', matrix.name, matrix.target) }}
+        path: ${{ needs.decide.outputs.dry_run == 'true' && format('dist/{0}/*.tar.gz', matrix.name) || format('dist/{0}/build-manifest.json', matrix.name) }}
+        if-no-files-found: error
   finalize:
-    needs: [decide, build]
     if: ${{ !cancelled() && needs.decide.outputs.dry_run != 'true' && needs.decide.outputs.any == 'true' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.decide.outputs.channels) }}
+    needs:
+    - decide
+    - build
     concurrency:
       group: finalize-${{ matrix.repo }}
       cancel-in-progress: false
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.decide.outputs.channels) }}
+      fail-fast: false
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-        with:
-          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
-          install: false      # plain `mise install` below — core:erlang has no lock URL, so auto `--locked` aborts
-      - name: install toolchain + orchestrator deps
-        run: |
-          mise install
-          (cd orchestrator && mise exec -- mix deps.get)
-      - uses: actions/download-artifact@v8
-        with:
-          path: fragments
-          pattern: manifest-*
-      - name: repo name (from GITHUB_REPOSITORY — set on every trigger; event.repository is not guaranteed for schedule)
-        id: reponame
-        run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
-      - name: mint finalize token (App, just-in-time)
-        id: fintoken
-        uses: actions/create-github-app-token@v3
-        with:
-          # Numeric App ID is accepted here: the action reads client-id || app-id (see pubtoken).
-          client-id: ${{ secrets.MISEMACS_APP_ID }}
-          private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          # <name>-emacs-<channel> — convention owned by Orchestrator.Naming.artifact_repo/2.
-          repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
-      - name: install verified Packslip CLI
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          version=1.2.0
-          asset="packslip-v${version}-linux-x64.tar.xz"
-          dir="$RUNNER_TEMP/packslip-cli"
-          mkdir -p "$dir"
-          gh release download "v${version}" --repo jdx/packslip --pattern "$asset" --dir "$dir"
-          gh attestation verify "$dir/$asset" --repo jdx/packslip
-          tar -xJf "$dir/$asset" -C "$dir" --strip-components=1
-          "$dir/packslip" version
-          echo "$dir" >> "$GITHUB_PATH"
-      - name: finalize + promote this channel
-        env:
-          GH_TOKEN: ${{ steps.fintoken.outputs.token }}
-        run: |
-          set -euo pipefail
-          FIN="$(mise run finalize -- \
-            --repo "${{ matrix.repo }}" \
-            --fragments "$GITHUB_WORKSPACE/fragments" \
-            --out "$GITHUB_WORKSPACE/dist/build-manifest.json")"
-          LATEST_TAG="$(printf '%s\n' "$FIN" | sed -n 's/^latest_tag=//p')"
-          BUILT_TAGS="$(printf '%s\n' "$FIN" | sed -n 's/^built_tags=//p')"
-          if [ -z "$LATEST_TAG" ]; then echo "no fragments for ${{ matrix.repo }}"; exit 0; fi
-          bash pipeline/promote --repo "${{ matrix.repo }}" --tag "$LATEST_TAG" \
-            --channel "${{ matrix.channel }}" \
-            --manifest "$GITHUB_WORKSPACE/dist/build-manifest.json" \
-            --attach "$BUILT_TAGS"
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+      with:
+        install: false
+    - name: install toolchain + orchestrator deps
+      run: |-
+        mise install
+        (cd orchestrator && mise exec -- mix deps.get)
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      with:
+        path: fragments
+        pattern: manifest-*
+    - name: repo name (from GITHUB_REPOSITORY — set on every trigger; event.repository is not guaranteed for schedule)
+      id: reponame
+      run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+    - name: mint finalize token (App, just-in-time)
+      id: fintoken
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+      with:
+        client-id: ${{ secrets.MISEMACS_APP_ID }}
+        private-key: ${{ secrets.MISEMACS_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+        repositories: ${{ format('{0}-emacs-{1}', steps.reponame.outputs.name, matrix.channel) }}
+    - name: finalize + promote this channel
+      env:
+        GH_TOKEN: ${{ steps.fintoken.outputs.token }}
+      run: |-
+        set -euo pipefail
+        FIN="$(mise run finalize -- \
+          --repo "${{ matrix.repo }}" \
+          --fragments "$GITHUB_WORKSPACE/fragments" \
+          --out "$GITHUB_WORKSPACE/dist/build-manifest.json")"
+        LATEST_TAG="$(printf '%s\n' "$FIN" | sed -n 's/^latest_tag=//p')"
+        BUILT_TAGS="$(printf '%s\n' "$FIN" | sed -n 's/^built_tags=//p')"
+        if [ -z "$LATEST_TAG" ]; then echo "no fragments for ${{ matrix.repo }}"; exit 0; fi
+        bash pipeline/promote --repo "${{ matrix.repo }}" --tag "$LATEST_TAG" \
+          --channel "${{ matrix.channel }}" \
+          --manifest "$GITHUB_WORKSPACE/dist/build-manifest.json" \
+          --attach "$BUILT_TAGS"

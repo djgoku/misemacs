@@ -1,18 +1,27 @@
+# Generated from Workflow.pkl. DO NOT EDIT.
 name: orchestrator-ci
-on:
+'on':
   pull_request:
-    paths: ["orchestrator/**", "templates/**", "mise.toml", "mise.lock", ".github/workflows/orchestrator-ci.yml"]
+    paths:
+    - orchestrator/**
+    - templates/**
+    - mise.toml
+    - mise.lock
+    - .github/**
 permissions:
   contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4   # installs mise; tools installed plain below (avoid auto --locked)
-        with:
-          version: 2026.6.6   # pin: 2026.6.7 shipped no macos-arm64 assets (install 404s)
-          install: false
-      - run: mise install   # plain — core:erlang has no lock URL, so `mise install --locked` is unusable
-      - run: mise run test   # mix deps.get && mix test --warnings-as-errors (in orchestrator/)
-      - run: mise run lint   # mix format --check-formatted
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+      with:
+        install: false
+    - name: install toolchain + orchestrator deps
+      run: |-
+        mise install
+        (cd orchestrator && mise exec -- mix deps.get)
+    - run: mise run test
+    - run: mise run lint
+    - run: mise run check-workflows

@@ -1,0 +1,32 @@
+/// Source for orchestrator-ci.yml. Regenerate with `mise run generate-workflows`.
+amends "@com.github.actions/Workflow.pkl"
+
+import "../steps.pkl" as shared
+
+name = "orchestrator-ci"
+
+on {
+  pull_request {
+    paths {
+      "orchestrator/**"
+      "templates/**"
+      "mise.toml"
+      "mise.lock"
+      ".github/**"
+    }
+  }
+}
+
+permissions { contents = "read" }
+
+jobs {
+  ["test"] {
+    `runs-on` = "ubuntu-latest"
+    steps {
+      ...shared.setup
+      new { run = "mise run test" }
+      new { run = "mise run lint" }
+      new { run = "mise run check-workflows" }
+    }
+  }
+}

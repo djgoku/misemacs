@@ -10,3 +10,6 @@
 
 # macOS noise
 .DS_Store
+
+# Per-version pixi envs and pixi's dry-run cache skeleton
+.pixi/
