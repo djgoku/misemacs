@@ -67,6 +67,10 @@ pkl eval --project-dir .github/ -m "$tmp" .github/index.pkl >/dev/null
 (cd "$tmp" && find . -type f) | while read -r f; do diff -u ".github/$f" "$tmp/$f"; done
 '''
 
+[tasks.outdated]
+description = "List available updates (report-only): mise tools, per-version pixi envs, pixi git sources, GitHub Actions"
+run = "elixir scripts/outdated.exs"
+
 [tasks.configure-check]
 description = "Phase 1: fetch Emacs + ./configure against the per-version pixi env; assert feature detection (configure-only); args: [version] (default master)"
 run = "bash scripts/configure-check.sh"
