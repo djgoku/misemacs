@@ -1,0 +1,8 @@
+[checks]
+full = "jouet test"                        # runs `mise run test`: mix test --warnings-as-errors in orchestrator/
+lint = "mise run lint"                     # mix format --check-formatted (no hk.pkl here)
+before_push = ["mise run check-workflows"] # CI: generated workflow YAML must match the .github/*.pkl sources
+
+[checks.focused]
+# NAME is a test path relative to orchestrator/, e.g. test/orchestrator/naming_test.exs[:LINE]
+orchestrator = "jouet test --cmd -- mise run test NAME"
