@@ -24,3 +24,9 @@ libtree-sitter = ">=0.25,<0.26"
 # Built from the feedstock git branch via pixi-build (Phase 0 = git-source; pixi.lock pins the commit).
 # Inert in the build env — Emacs never links it; pipeline/stage-enchant copies it from $CONDA_PREFIX.
 enchant = { git = "https://github.com/djgoku/enchant-feedstock", branch = "misemacs-recipe", subdirectory = "recipe" }
+
+# Compiler for the pixi-build of enchant (above). Its run_exports set the libcxx floor, so this
+# keeps libcxx at 22. Raise it on purpose, together with a full pixi update.
+[workspace.build-variants]
+c_compiler_version = ["22"]
+cxx_compiler_version = ["22"]
