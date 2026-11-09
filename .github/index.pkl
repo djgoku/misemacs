@@ -1,8 +1,13 @@
 /// Renders the GitHub Actions workflows with action versions pinned to git
-/// SHAs (kept up to date by Dependabot). Regenerate with `mise run generate-workflows`.
+/// SHAs from workflows/__lockfile__.yml. Regenerate with `mise run generate-workflows`.
 amends "@pkl.github.dependabotManagedActions/DependabotManagedActions.pkl"
 
 workflows {
   ["workflows/daily.yml"] = import("workflows/daily.pkl")
   ["workflows/orchestrator-ci.yml"] = import("workflows/orchestrator-ci.pkl")
+}
+
+// Updates come from uchi, not Dependabot; keep the SHA pinning, drop dependabot.yml.
+output {
+  files = super.files.toMap().remove("dependabot.yml").toMapping()
 }
