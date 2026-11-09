@@ -13,7 +13,7 @@ Each `versions/<v>/` holds a pixi workspace whose lock pins the full conda-forge
 
 - Keep each dependency change separate and as small as the goal allows.
 - Say which channels will release before you make the change.
-- Run a broad `pixi update` only when the user asks for one.
+- Run a broad `pixi update` only when the user asks for one. The update-deps sweep proposes one each night as a `deps/pixi` PR; merging that PR is the ask. Review it as a full update that releases every channel, and fix a failed or regressed sweep run with the rest of this skill.
 
 ## Read a solver failure
 
