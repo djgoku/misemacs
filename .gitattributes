@@ -1,7 +1,6 @@
 # Generated files. GitHub collapses them in PR diffs.
-# Workflow YAML and dependabot.yml: `mise run generate-workflows` (edit the .pkl sources).
+# Workflow YAML: `mise run generate-workflows` (edit the .pkl sources).
 # PklProject.deps.json: `pkl project resolve .github/`. mise.lock: `mise lock`.
 .github/workflows/*.yml linguist-generated=true
-.github/dependabot.yml linguist-generated=true
 .github/PklProject.deps.json linguist-generated=true
 mise.lock linguist-generated=true
