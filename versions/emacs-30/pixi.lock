@@ -55,7 +55,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/texinfo-7.2-pl5321ha855274_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-hbeba79b_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
-      - conda_source: enchant[96db2ef5] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
+      - conda_source: enchant[485e8f10] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
 packages:
 - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.10.23-hbd8a1cb_0.conda
   sha256: 95619b9c1184be7175392eeb0ee7eeb5ccf25d280951f4225f2d62e725790be3
@@ -276,9 +276,9 @@ packages:
   run_exports: {}
   size: 31813
   timestamp: 1791933888154
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang_osx-arm64-22.1.8-hc95f77d_35.conda
-  sha256: 654d67e79a8a3edb0dd70db6b030a4dab3864272eef6a6a20a79df7c1850f9bb
-  md5: 16686545d04c3fea5a9d0c129bdf2445
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang_osx-arm64-22.1.8-hc95f77d_36.conda
+  sha256: 0c91cd916c392dab5aa61520ed1d24cebb55ee7d278a07ef9114586397856b72
+  md5: ecc7dd42064a904401ef0439e01e3d00
   depends:
   - cctools_osx-arm64
   - clang_impl_osx-arm64 22.1.8.*
@@ -286,8 +286,8 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   run_exports: {}
-  size: 20608
-  timestamp: 1793042659475
+  size: 20684
+  timestamp: 1794312761471
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_impl_osx-arm64-22.1.8-default_hf997f23_11.conda
   sha256: b32138dcade714192bb6076fd6654cfa34513acccd690c8802248731b24c3d50
   md5: bc3910262737a830c095bfea5b32a210
@@ -306,12 +306,12 @@ packages:
   run_exports: {}
   size: 31900
   timestamp: 1791933888154
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_osx-arm64-22.1.8-hc95f77d_35.conda
-  sha256: 8e02f44567279f40d6994f3dc2a2963caebb785a8e9120087a91ccd4e9123cc1
-  md5: 49a30caa521f7a2f4f86ccf0c0654028
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_osx-arm64-22.1.8-hc95f77d_36.conda
+  sha256: f916b8dfede7a231e02f7b51646d596c478c1ec6b60f4d935c883e6e893a59d7
+  md5: 3a7c21d4099ffcbfa60e050388ab99d8
   depends:
   - cctools_osx-arm64
-  - clang_osx-arm64 22.1.8 hc95f77d_35
+  - clang_osx-arm64 22.1.8 hc95f77d_36
   - clangxx_impl_osx-arm64 22.1.8.*
   - sdkroot_env_osx-arm64
   license: BSD-3-Clause
@@ -319,8 +319,8 @@ packages:
   run_exports:
     strong:
     - libcxx >=22
-  size: 19298
-  timestamp: 1793042662033
+  size: 19301
+  timestamp: 1794312764168
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/compiler-rt-22.1.8-hce30654_2.conda
   sha256: 28c01956aefbe38a8bddde58bb2398789fd580ffb341a12c54f44a542fa1a358
   md5: fa14e650717aac340bcc3251bab8117b
@@ -1201,7 +1201,7 @@ packages:
     - zstd >=1.5.7,<1.6.0a0
   size: 433687
   timestamp: 1786599629846
-- conda_source: enchant[96db2ef5] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
+- conda_source: enchant[485e8f10] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
   version: 2.8.15
   build: h30091e8_0
   subdir: osx-arm64
@@ -1239,9 +1239,9 @@ packages:
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang-22-22.1.8-default_hd876229_11.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang-scan-deps-22.1.8-default_h79071a4_11.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang_impl_osx-arm64-22.1.8-default_h79071a4_11.conda
-  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang_osx-arm64-22.1.8-hc95f77d_35.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang_osx-arm64-22.1.8-hc95f77d_36.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_impl_osx-arm64-22.1.8-default_hf997f23_11.conda
-  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_osx-arm64-22.1.8-hc95f77d_35.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clangxx_osx-arm64-22.1.8-hc95f77d_36.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/compiler-rt-22.1.8-hce30654_2.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/compiler-rt22-22.1.8-hdb3d66b_2.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/doxygen-1.18.0-py310h3226bdb_0.conda
