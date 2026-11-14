@@ -61,66 +61,66 @@ url = "https://github.com/erlef/otp_builds/releases/download/OTP-29.1.2/otp-aarc
 url_api = "https://api.github.com/repos/erlef/otp_builds/releases/assets/640679208"
 
 [[tools.packslip]]
-version = "1.11.3"
+version = "1.11.4"
 backend = "packslip:packslip.dev"
 
 [tools.packslip."platforms.linux-arm64"]
-checksum = "sha256:32a7698f499b270327832d62869e9eaa0449fa689eed7941ac2668f36c130389"
-url = "https://packslip.dev/v1.11.3/packslip-v1.11.3-linux-arm64.tar.xz"
+checksum = "sha256:0cd0e3f96917dacbc0a993affacfc2a838df2503e3ac2017cee072c064cb30bc"
+url = "https://packslip.dev/v1.11.4/packslip-v1.11.4-linux-arm64.tar.xz"
 signer = "sigstore-oidc:https://github.com/jdx/packslip/.github/workflows/release.yml"
 
 [tools.packslip."platforms.linux-arm64-musl"]
-checksum = "sha256:32a7698f499b270327832d62869e9eaa0449fa689eed7941ac2668f36c130389"
-url = "https://packslip.dev/v1.11.3/packslip-v1.11.3-linux-arm64.tar.xz"
+checksum = "sha256:0cd0e3f96917dacbc0a993affacfc2a838df2503e3ac2017cee072c064cb30bc"
+url = "https://packslip.dev/v1.11.4/packslip-v1.11.4-linux-arm64.tar.xz"
 signer = "sigstore-oidc:https://github.com/jdx/packslip/.github/workflows/release.yml"
 
 [tools.packslip."platforms.linux-x64"]
-checksum = "sha256:26efeca080b011c310f90bcd2f57cd78b4a364552831ed84f5216c7cba0932ad"
-url = "https://packslip.dev/v1.11.3/packslip-v1.11.3-linux-x64.tar.xz"
+checksum = "sha256:011ccc784584a466bd12a96f76c8e7a3ff365a2c99aee53884140cecf020aadd"
+url = "https://packslip.dev/v1.11.4/packslip-v1.11.4-linux-x64.tar.xz"
 signer = "sigstore-oidc:https://github.com/jdx/packslip/.github/workflows/release.yml"
 
 [tools.packslip."platforms.linux-x64-musl"]
-checksum = "sha256:26efeca080b011c310f90bcd2f57cd78b4a364552831ed84f5216c7cba0932ad"
-url = "https://packslip.dev/v1.11.3/packslip-v1.11.3-linux-x64.tar.xz"
+checksum = "sha256:011ccc784584a466bd12a96f76c8e7a3ff365a2c99aee53884140cecf020aadd"
+url = "https://packslip.dev/v1.11.4/packslip-v1.11.4-linux-x64.tar.xz"
 signer = "sigstore-oidc:https://github.com/jdx/packslip/.github/workflows/release.yml"
 
 [tools.packslip."platforms.macos-arm64"]
-checksum = "sha256:25985ece3e3ab5ad2d0f9d7c1da03218507e9d0c170392d72b830e02348c27cc"
-url = "https://packslip.dev/v1.11.3/packslip-v1.11.3-darwin-arm64.tar.xz"
+checksum = "sha256:a97d048677de32ade64ea353d85c4aeebc8dc1e2adee51f83e0cb0311e135e52"
+url = "https://packslip.dev/v1.11.4/packslip-v1.11.4-darwin-arm64.tar.xz"
 signer = "sigstore-oidc:https://github.com/jdx/packslip/.github/workflows/release.yml"
 
 [[tools.pixi]]
-version = "0.84.1"
+version = "0.84.2"
 backend = "github:prefix-dev/pixi"
 
 [tools.pixi."platforms.linux-arm64"]
-checksum = "sha256:0595613aedd95f84f90a55ba4b51fc1e4b86afb4eaa3e34ca3f3454d8f22c2e6"
-url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.1/pixi-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/710237868"
+checksum = "sha256:0957b6352d077bb3ffcce913f90b1e6cfbc6b98888a45d59ee2910e8c4811110"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.2/pixi-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/731635725"
 provenance = "github-attestations"
 
 [tools.pixi."platforms.linux-arm64-musl"]
-checksum = "sha256:0595613aedd95f84f90a55ba4b51fc1e4b86afb4eaa3e34ca3f3454d8f22c2e6"
-url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.1/pixi-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/710237868"
+checksum = "sha256:0957b6352d077bb3ffcce913f90b1e6cfbc6b98888a45d59ee2910e8c4811110"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.2/pixi-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/731635725"
 provenance = "github-attestations"
 
 [tools.pixi."platforms.linux-x64"]
-checksum = "sha256:c81a16595e9e925fac3b12fe50cedbf415619a421ad2b72c1bba2a6ba6c2454a"
-url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.1/pixi-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/710238291"
+checksum = "sha256:6d2a576bde0a7b26533a068fec0aea6e4ee21c36668efc1dc73fce90110906ae"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.2/pixi-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/731636110"
 provenance = "github-attestations"
 
 [tools.pixi."platforms.linux-x64-musl"]
-checksum = "sha256:c81a16595e9e925fac3b12fe50cedbf415619a421ad2b72c1bba2a6ba6c2454a"
-url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.1/pixi-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/710238291"
+checksum = "sha256:6d2a576bde0a7b26533a068fec0aea6e4ee21c36668efc1dc73fce90110906ae"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.2/pixi-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/731636110"
 provenance = "github-attestations"
 
 [tools.pixi."platforms.macos-arm64"]
-checksum = "sha256:3b351fe52f3d12147457b6e55e3ab617cf43a5011f92230a4c506f9676caff8f"
-url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.1/pixi-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/710237700"
+checksum = "sha256:039d4b48c7e17bc62a36faa2af1b13d0d187f5dd6e8fea17e0587302438df6e6"
+url = "https://github.com/prefix-dev/pixi/releases/download/v0.84.2/pixi-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/prefix-dev/pixi/releases/assets/731635549"
 provenance = "github-attestations"
 
 [[tools.pkl]]
