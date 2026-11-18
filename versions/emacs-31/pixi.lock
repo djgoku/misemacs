@@ -24,7 +24,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/gnutls-3.8.13-hfe86254_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/hunspell-1.7.6-h9026164_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libasprintf-0.25.1-hae62183_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.5-hc645fd0_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.6-hc645fd0_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libedit-3.1.20260512-pl5321h26f1114_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libexpat-2.9.0-h6111c0a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libffi-3.7.0-h47dc5ef_1.conda
@@ -55,7 +55,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/texinfo-7.2-pl5321ha855274_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-hbeba79b_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
-      - conda_source: enchant[961411ed] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
+      - conda_source: enchant[89fa678a] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
 packages:
 - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.10.23-hbd8a1cb_0.conda
   sha256: 95619b9c1184be7175392eeb0ee7eeb5ccf25d280951f4225f2d62e725790be3
@@ -585,16 +585,16 @@ packages:
     - libcompiler-rt >=22.1.8
   size: 1374400
   timestamp: 1787293619574
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.5-hc645fd0_2.conda
-  sha256: a839afbb532798d2cb2c51306506fb4b3aa48e075319513a917bd98d7b6cb0eb
-  md5: 4a18f321414c5c2471fdb443ba47d7c2
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.6-hc645fd0_0.conda
+  sha256: 822b2a88313977594230b7be745324e4c50293a35cf9244bb19ecc9c2c385288
+  md5: fcd64d8eae3a3e5a5883da0f7602832e
   depends:
   - __osx >=11.0
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
   run_exports: {}
-  size: 567079
-  timestamp: 1794552124926
+  size: 566632
+  timestamp: 1794983965400
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-devel-22.1.8-h6dc3340_0.conda
   sha256: e734ac1ed426d09363d242674a286dc004f041ad1167e73912e11d3634cee09d
   md5: f7784a43f0ed7158e918fd8ec0843b47
@@ -1202,7 +1202,7 @@ packages:
     - zstd >=1.5.7,<1.6.0a0
   size: 433687
   timestamp: 1786599629846
-- conda_source: enchant[961411ed] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
+- conda_source: enchant[89fa678a] @ git+https://github.com/djgoku/enchant-feedstock?subdirectory=recipe&branch=misemacs-recipe#f82019743cc4cf4f2be1ae3fcde573433f9ef323
   version: 2.8.15
   build: h30091e8_0
   subdir: osx-arm64
@@ -1253,7 +1253,7 @@ packages:
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libclang-cpp23.1-23.1.5-default_h8bbc02d_0.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libclang13-23.1.5-default_hf8b46ca_0.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcompiler-rt-22.1.8-hdb3d66b_2.conda
-  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.5-hc645fd0_2.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.6-hc645fd0_0.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-devel-22.1.8-h6dc3340_0.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libiconv-1.18-he4c29f2_3.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libllvm22-22.1.8-h759d1ac_3.conda
@@ -1286,7 +1286,7 @@ packages:
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/glib-2.88.3-hd5bf27b_4.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/glib-tools-2.88.3-hf080417_4.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/hunspell-1.7.6-h9026164_0.conda
-  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.5-hc645fd0_2.conda
+  - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-23.1.6-hc645fd0_0.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libedit-3.1.20260512-pl5321h26f1114_0.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libexpat-2.9.0-h6111c0a_0.conda
   - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libffi-3.7.0-h47dc5ef_1.conda
